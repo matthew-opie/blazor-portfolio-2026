@@ -160,6 +160,37 @@ li::marker {
     margin-bottom: 3em;
 }
 
+#resume-patents {
+    margin-bottom: 0;
+}
+
+.awards-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.75em;
+    padding: 0.5em;
+}
+
+.award-item h5 {
+    margin-bottom: 0.2em;
+}
+
+.award-item p {
+    margin: 0;
+    color: #333;
+}
+
+#infinity a {
+    color: #1a5fa8;
+    font-size: 18px;
+    font-weight: 800;
+    text-decoration: solid;
+}
+
+#infinity a:hover {
+    text-decoration: underline;
+}
+
 #all-skills {
     display: flex;
     flex: auto;

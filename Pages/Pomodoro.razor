@@ -1,6 +1,5 @@
-﻿@page "/pomodoro"
-@inject IHtmlNotificationService NotificationService
-@using Majorsoft.Blazor.Components.Notifications
+@page "/pomodoro"
+@inject IJSRuntime JS
 @implements IAsyncDisposable
 
 <PageTitle>@Title</PageTitle>
@@ -39,12 +38,9 @@
 
 @code {
 
-    //HTML5 Notifications:
     private const string NotificationTitle = "Alarm";
     private const string NotificationBody = "Time's up!";
     private const string NotificationIcon = "./images/icons/clock-red.png";
-    private bool _notificationSupported;
-    private HtmlNotificationPermissionTypes _htmlNotificationPermission;
 
     private string Title => State switch
     {
@@ -71,19 +67,10 @@
     {
         if (firstRender)
         {
-            _notificationSupported = await NotificationService.IsBrowserSupportedAsync();
-            if (_notificationSupported)
+            var supported = await JS.InvokeAsync<bool>("notifications.isSupported");
+            if (supported)
             {
-                await NotificationService.RequestPermissionAsync(res =>
-                {
-                    _htmlNotificationPermission = res;
-                    StateHasChanged();
-                    return Task.CompletedTask;
-                });
-            }
-            else
-            {
-                StateHasChanged();
+                await JS.InvokeAsync<string>("notifications.requestPermission");
             }
         }
     }
@@ -122,7 +109,6 @@
     {
         State = TimerState.Init;
         TimeRemaining = TimeTotalSeconds;
-
         UpdateTimeString();
     }
 
@@ -149,28 +135,13 @@
     {
         State = TimerState.Alarm;
         StateHasChanged();
-        await ShowAlarmNotification();
+        await JS.InvokeVoidAsync("notifications.show", NotificationTitle, NotificationBody, NotificationIcon);
     }
 
-    private async Task ShowAlarmNotification()
+    public ValueTask DisposeAsync()
     {
-        var options = new HtmlNotificationOptions(NotificationTitle)
-        {
-            Body = NotificationBody,
-            Icon = NotificationIcon,
-            Vibrate = new[] { 100, 200, 100 }
-        };
-
-        var id = await NotificationService.ShowsAsync(options);
-    }
-
-    public async ValueTask DisposeAsync()
-    {
-        if (NotificationService is not null)
-        {
-            await NotificationService.DisposeAsync();
-            Stop();
-        }
+        Stop();
+        return ValueTask.CompletedTask;
     }
 
     public enum TimerState
