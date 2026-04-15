@@ -1,46 +1,34 @@
-﻿@page "/"
-
+@page "/"
 <PageTitle>mattopie.com</PageTitle>
 
-<div class="sections">
-    <div class="card">
+<div class="hero">
+    <div class="hero-content">
+        <p class="hero-eyebrow">Hi, I'm</p>
         <h1 id="name">Matt Opie</h1>
-        <h2>Senior Software Engineer</h2>
-        <h3><i class="fa-solid fa-sun"></i>Boston, MA<i class="fa-solid fa-snowflake"></i></h3>
-        <div id="bio">
-            <div id="business-card">
-                <img class="headshot" src="images/headshot-business-card.png" alt=""/>
-            </div>
-            <div id="bio-info">
-                <p>
-                    Greetings! Meet Matt,
-                    an electrical engineer with a strong academic foundation. My journey, spiced with substantial
-                    software development experience, has ignited an ever-growing passion for programming.
-                </p>
-                <p>
-                    Welcome to the universe of my imagination and creativity! This site is not just a portfolio,
-                    but a journey through my experimental ideas transformed into fascinating projects.
-                    It's a playground where innovation meets execution. Dive in, explore, and enjoy the
-                    innovative technology solutions that I've designed!
-                </p>
-            </div>
+        <h2 class="hero-sub">Senior Software Engineer</h2>
+        <p class="hero-location">
+            <i class="fa-solid fa-location-dot"></i> Boston, MA
+        </p>
+        <div class="hero-cta">
+            <a class="btn-primary" href="resume">View Résumé</a>
+            <a class="btn-secondary" href="portfolio">See Projects</a>
         </div>
-
     </div>
-    <div class="quick-links">
-        <div>
-            <a href="resume">
-                <div class="card" id="resume-link">
-                    <h1><span class="fa-solid fa-file icon" aria-hidden="true"></span>Résumé</h1>
-                </div>
-            </a>
-        </div>
-        <div>
-            <a href="portfolio">
-                <div class="card" id="portfolio-link">
-                    <h1><span class="fa-solid fa-code icon" aria-hidden="true"></span>Portfolio</h1>
-                </div>
-            </a>
-        </div>
+</div>
+
+<div class="bio-card card">
+    <div class="bio-photo">
+        <img class="headshot" src="images/headshot-business-card.png" alt="Matt Opie" />
+    </div>
+    <div class="bio-text">
+        <p>
+            Full-stack software engineer with a background in electrical engineering and 7+ years of experience
+            building enterprise applications. Currently working as a lead consultant, owning end-to-end feature
+            delivery for a large-scale insurance platform built on .NET and Vue.js.
+        </p>
+        <p>
+            Previously at Johnson &amp; Johnson Vision, where I co-invented a U.S.-patented computer-vision
+            quality control system using MATLAB-based machine learning and led capital projects up to $600K.
+        </p>
     </div>
 </div>

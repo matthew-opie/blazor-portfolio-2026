@@ -1,67 +1,210 @@
 @page "/pomodoro"
 @inject IJSRuntime JS
+@inject IWebAssemblyHostEnvironment HostEnv
 @implements IAsyncDisposable
+@using System.Globalization
+@using Microsoft.AspNetCore.Components.WebAssembly.Hosting
 
-<PageTitle>@Title</PageTitle>
+<PageTitle>@PageTitle</PageTitle>
 
-<div id="pomodoro" class="card">
-    <h3>Pomodoro Timer</h3>
+<div id="pomodoro" class="card @ModeClass">
 
-    <div class="timer-type-buttons">
-        <button @onclick="Reset" class="neumorph">
-            Pomodoro
-        </button>
-        <button @onclick="ShortBreak" class="neumorph">
-            Short Break
-        </button>
-        <button @onclick="LongBreak" class="neumorph">
-            Long Break
-        </button>
+    <div class="mode-tabs">
+        @foreach (var mode in new[] { TimerMode.Pomodoro, TimerMode.ShortBreak, TimerMode.LongBreak })
+        {
+            var m = mode;
+            var ms = _modes[m];
+            <button class="tab @(CurrentMode == m ? "active" : "")"
+                    @onclick="@(() => CurrentMode = m)">
+                @TabLabel(m)
+                @if (ms.State == TimerState.Running && CurrentMode != m)
+                {
+                    <span class="tab-dot"></span>
+                }
+            </button>
+        }
     </div>
 
-    <div class="time-display">@TimeString</div>
-
-    <div class="action-buttons">
-        <button @onclick="Start" class="neumorph">
-            Start
-        </button>
-        <button @onclick="Stop" class="neumorph">
-            Stop
-        </button>
-        <button @onclick="Reset" class="neumorph">
-            Reset
-        </button>
+    <div class="ring-wrapper">
+        <svg class="progress-ring" viewBox="0 0 200 200" xmlns="http://www.w3.org/2000/svg">
+            <circle class="ring-bg"   cx="100" cy="100" r="88" />
+            <circle class="ring-fill" cx="100" cy="100" r="88"
+                    stroke-dasharray="@DashArray"
+                    stroke-dashoffset="@DashOffset"
+                    transform="rotate(-90 100 100)" />
+        </svg>
+        <div class="ring-content">
+            <div class="time-display">@CurrentMs.TimeString</div>
+            <div class="ring-label">@StateLabel</div>
+        </div>
     </div>
+
+    <div class="session-track">
+        @for (int i = 0; i < 4; i++)
+        {
+            var idx = i;
+            var filled = idx < PomodoroCount % 4
+                      || (CurrentMs.State == TimerState.Alarm && CurrentMode == TimerMode.Pomodoro && idx == PomodoroCount % 4);
+            <div class="session-dot @(filled ? "filled" : "")"></div>
+        }
+        <span class="session-label">Session @(PomodoroCount + 1)</span>
+    </div>
+
+    <div class="action-row">
+        @if (CurrentMs.State == TimerState.Alarm)
+        {
+            <button class="btn-main" @onclick="StartSuggested">@SuggestedNextLabel</button>
+            <button class="btn-minor" @onclick="ResetCurrent">Reset</button>
+        }
+        else
+        {
+            <button class="btn-main" @onclick="ToggleStartStop">
+                @(CurrentMs.State == TimerState.Running ? "Pause" : "Start")
+            </button>
+            <button class="btn-minor" @onclick="ResetCurrent"
+                    disabled="@(CurrentMs.State == TimerState.Init)">Reset</button>
+        }
+    </div>
+
+    @if (_notificationBlocked)
+    {
+        <p class="notification-hint">
+            <i class="fa-solid fa-bell-slash"></i>
+            Notifications blocked — enable them in browser settings.
+        </p>
+    }
+
+    @if (HostEnv.IsDevelopment())
+    {
+        <button class="debug-btn" @onclick="TestNotification" title="Test browser notification">
+            <i class="fa-solid fa-bug"></i> Test Notification
+        </button>
+    }
 
 </div>
 
-
 @code {
 
-    private const string NotificationTitle = "Alarm";
-    private const string NotificationBody = "Time's up!";
     private const string NotificationIcon = "./images/icons/clock-red.png";
 
-    private string Title => State switch
+    private static readonly Dictionary<TimerMode, int> Durations = new()
     {
-        TimerState.Init => "mattopie.com - Tomato Timer",
-        TimerState.Running => $"Timer - {TimeString}",
-        TimerState.Stopped => TimeRemaining > 0
-            ? $"Timer - {TimeString} (Stopped)"
-            : "mattopie.com - Tomato Timer",
-        TimerState.Alarm => "Time's up!",
-        _ => "mattopie.com"
+        [TimerMode.Pomodoro]   = 1500,
+        [TimerMode.ShortBreak] = 300,
+        [TimerMode.LongBreak]  = 900,
     };
 
-    private int TimeRemaining { get; set; } = TimeTotalSeconds;
-    private string TimeString { get; set; } = "25:00";
-    private const int TimeTotalSeconds = 1500;
-    private const int TimeShortbreakSeconds = 300;
-    private const int TimeLongbreakSeconds = 900;
-    public List<string> CompletedTasks { get; set; } = new();
-    public string CurrentTask { get; set; } = string.Empty;
-    public List<string> ActiveTasks { get; set; } = new();
-    private TimerState State { get; set; } = TimerState.Init;
+    private const double Radius        = 88;
+    private const double Circumference = 2 * Math.PI * Radius;
+
+    // Per-mode state — each tab has its own timer
+    private class ModeState
+    {
+        public int        Total         { get; init; }
+        public int        TimeRemaining { get; set; }
+        public TimerState State         { get; set; } = TimerState.Init;
+        public string     TimeString    { get; set; }
+
+        public ModeState(int total)
+        {
+            Total         = total;
+            TimeRemaining = total;
+            TimeString    = FormatTime(total);
+        }
+
+        public static string FormatTime(int seconds) =>
+            $"{seconds / 60}:{seconds % 60:D2}";
+    }
+
+    private readonly Dictionary<TimerMode, ModeState> _modes = new()
+    {
+        [TimerMode.Pomodoro]   = new(1500),
+        [TimerMode.ShortBreak] = new(300),
+        [TimerMode.LongBreak]  = new(900),
+    };
+
+    // Convenience — the mode currently on screen
+    private ModeState CurrentMs => _modes[CurrentMode];
+
+    private TimerMode CurrentMode   { get; set; } = TimerMode.Pomodoro;
+    private int       PomodoroCount { get; set; } = 0;
+    private bool      _notificationBlocked;
+    private CancellationTokenSource? _cts;
+    private TimerMode? _runningMode; // which mode's loop is ticking
+
+    // SVG ring — driven by the viewed mode
+    private string DashArray  => Circumference.ToString("F2", CultureInfo.InvariantCulture);
+    private string DashOffset
+    {
+        get
+        {
+            var ms       = CurrentMs;
+            var progress = ms.Total > 0 ? (double)ms.TimeRemaining / ms.Total : 0d;
+            return (Circumference * (1d - progress)).ToString("F2", CultureInfo.InvariantCulture);
+        }
+    }
+
+    private string ModeClass => CurrentMode switch
+    {
+        TimerMode.ShortBreak => "mode-short-break",
+        TimerMode.LongBreak  => "mode-long-break",
+        _                    => "mode-pomodoro",
+    };
+
+    private string PageTitle
+    {
+        get
+        {
+            // Show the running timer in the tab, regardless of what's viewed
+            if (_runningMode.HasValue)
+            {
+                var rs = _modes[_runningMode.Value];
+                return $"{rs.TimeString} — {ModeName(_runningMode.Value)}";
+            }
+            return CurrentMs.State switch
+            {
+                TimerState.Alarm   => "Time's Up!",
+                TimerState.Stopped => $"{CurrentMs.TimeString} (Paused)",
+                _                  => "mattopie.com — Tomato Timer",
+            };
+        }
+    }
+
+    private string StateLabel => CurrentMs.State switch
+    {
+        TimerState.Running => ModeName(CurrentMode),
+        TimerState.Stopped => "Paused",
+        TimerState.Alarm   => "Done!",
+        _                  => ModeName(CurrentMode),
+    };
+
+    private TimerMode SuggestedNext => CurrentMode switch
+    {
+        TimerMode.Pomodoro when PomodoroCount % 4 == 3 => TimerMode.LongBreak,
+        TimerMode.Pomodoro                             => TimerMode.ShortBreak,
+        _                                              => TimerMode.Pomodoro,
+    };
+
+    private string SuggestedNextLabel => SuggestedNext switch
+    {
+        TimerMode.LongBreak  => "Take Long Break \u2192",
+        TimerMode.ShortBreak => "Take Short Break \u2192",
+        _                    => "Start Pomodoro \u2192",
+    };
+
+    private static string ModeName(TimerMode mode) => mode switch
+    {
+        TimerMode.ShortBreak => "Short Break",
+        TimerMode.LongBreak  => "Long Break",
+        _                    => "Focus",
+    };
+
+    private static string TabLabel(TimerMode mode) => mode switch
+    {
+        TimerMode.ShortBreak => "Short Break",
+        TimerMode.LongBreak  => "Long Break",
+        _                    => "Pomodoro",
+    };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
@@ -70,86 +213,132 @@
             var supported = await JS.InvokeAsync<bool>("notifications.isSupported");
             if (supported)
             {
-                await JS.InvokeAsync<string>("notifications.requestPermission");
-            }
-        }
-    }
-
-    private async void Run()
-    {
-        while (TimeRemaining > 0 && State == TimerState.Running)
-        {
-            TimeRemaining--;
-            await Task.Delay(1000);
-            if (State == TimerState.Running)
-            {
-                UpdateTimeString();
+                var permission = await JS.InvokeAsync<string>("notifications.requestPermission");
+                _notificationBlocked = permission == "denied";
                 StateHasChanged();
             }
+        }
+    }
 
-            if (TimeRemaining == 0)
+    private void ToggleStartStop()
+    {
+        if (CurrentMs.State == TimerState.Running)
+            PauseCurrent();
+        else
+            StartCurrent();
+    }
+
+    private void StartCurrent()
+    {
+        if (CurrentMs.State == TimerState.Running) return;
+
+        // Pause any other running mode first
+        if (_runningMode.HasValue && _runningMode.Value != CurrentMode)
+        {
+            _modes[_runningMode.Value].State = TimerState.Stopped;
+        }
+
+        CancelRun();
+        CurrentMs.State = TimerState.Running;
+        _runningMode    = CurrentMode;
+        _cts            = new CancellationTokenSource();
+        _ = RunAsync(CurrentMode, _cts.Token);
+    }
+
+    private void PauseCurrent()
+    {
+        CancelRun();
+        CurrentMs.State = TimerState.Stopped;
+        _runningMode    = null;
+    }
+
+    private void ResetCurrent()
+    {
+        // Only cancel if THIS mode is the one running
+        if (_runningMode == CurrentMode)
+        {
+            CancelRun();
+            _runningMode = null;
+        }
+        CurrentMs.State         = TimerState.Init;
+        CurrentMs.TimeRemaining = CurrentMs.Total;
+        CurrentMs.TimeString    = ModeState.FormatTime(CurrentMs.Total);
+    }
+
+    private void StartSuggested()
+    {
+        if (CurrentMode == TimerMode.Pomodoro)
+            PomodoroCount++;
+
+        var next = SuggestedNext;
+
+        // Reset the just-completed mode
+        CurrentMs.State         = TimerState.Init;
+        CurrentMs.TimeRemaining = CurrentMs.Total;
+        CurrentMs.TimeString    = ModeState.FormatTime(CurrentMs.Total);
+
+        CurrentMode = next;
+        StartCurrent();
+    }
+
+    private void CancelRun()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+    }
+
+    private async Task RunAsync(TimerMode mode, CancellationToken ct)
+    {
+        var ms = _modes[mode];
+
+        while (ms.TimeRemaining > 0)
+        {
+            try { await Task.Delay(1000, ct); }
+            catch (OperationCanceledException) { return; }
+
+            ms.TimeRemaining--;
+            ms.TimeString = ModeState.FormatTime(ms.TimeRemaining);
+            StateHasChanged();
+
+            if (ms.TimeRemaining == 0)
             {
-                TriggerAlarm();
+                _runningMode = null;
+                await TriggerAlarmAsync(mode);
+                return;
             }
         }
     }
 
-    private void Start()
+    private async Task TriggerAlarmAsync(TimerMode mode)
     {
-        State = TimerState.Running;
-        Run();
-    }
-
-    private void Stop()
-    {
-        State = TimerState.Stopped;
-    }
-
-    private void Reset()
-    {
-        State = TimerState.Init;
-        TimeRemaining = TimeTotalSeconds;
-        UpdateTimeString();
-    }
-
-    private void ShortBreak()
-    {
-        State = TimerState.Init;
-        TimeRemaining = TimeShortbreakSeconds;
-        UpdateTimeString();
-    }
-
-    private void LongBreak()
-    {
-        State = TimerState.Init;
-        TimeRemaining = TimeLongbreakSeconds;
-        UpdateTimeString();
-    }
-
-    private void UpdateTimeString()
-    {
-        TimeString = $"{Math.Floor(TimeRemaining / 60.0f)}:{TimeRemaining % 60:D2}";
-    }
-
-    private async void TriggerAlarm()
-    {
-        State = TimerState.Alarm;
+        _modes[mode].State = TimerState.Alarm;
+        CurrentMode        = mode; // bring the user back to see the alarm
         StateHasChanged();
-        await JS.InvokeVoidAsync("notifications.show", NotificationTitle, NotificationBody, NotificationIcon);
+        try
+        {
+            var title = mode == TimerMode.Pomodoro ? "Focus session complete!" : "Break's over!";
+            await JS.InvokeVoidAsync("notifications.show", title, SuggestedNextLabel, NotificationIcon);
+        }
+        catch { /* page may be unloading */ }
+    }
+
+    private async Task TestNotification()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("notifications.show",
+                "Test Notification", "Pomodoro notifications are working!", NotificationIcon);
+        }
+        catch { }
     }
 
     public ValueTask DisposeAsync()
     {
-        Stop();
+        CancelRun();
         return ValueTask.CompletedTask;
     }
 
-    public enum TimerState
-    {
-        Init,
-        Stopped,
-        Running,
-        Alarm
-    }
-
+    public enum TimerState { Init, Stopped, Running, Alarm }
+    public enum TimerMode  { Pomodoro, ShortBreak, LongBreak }
 }

@@ -1,0 +1,315 @@
+#typing-test {
+    max-width: 680px;
+    margin: 0 auto;
+    padding: 2rem 1.75rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.75rem;
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+
+.tt-top-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.25rem;
+}
+
+.tt-live-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    min-width: 64px;
+}
+
+.tt-live-val {
+    font-size: 1.85rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: -0.01em;
+    transition: color 0.3s;
+}
+
+.tt-live-val.tt-muted {
+    color: var(--text-dim);
+}
+
+.tt-live-lbl {
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+    margin-top: 0.2rem;
+}
+
+.tt-pct-sm {
+    font-size: 1.1rem;
+}
+
+.tt-countdown {
+    font-size: 2.75rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    min-width: 2.5ch;
+    text-align: center;
+    transition: color 0.3s;
+    letter-spacing: -0.02em;
+}
+
+.tt-countdown.tt-urgent {
+    color: #ef4444;
+    animation: pulse-urgent 0.8s ease-in-out infinite;
+}
+
+@keyframes pulse-urgent {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0.4; }
+}
+
+/* ── Word display ─────────────────────────────────────────────────────────── */
+
+.tt-words-clip {
+    height: 6.25rem;   /* ~3 lines at 2rem line-height */
+    overflow: hidden;
+    position: relative;
+    cursor: text;
+    user-select: none;
+    -webkit-user-select: none;
+    border-radius: 8px;
+}
+
+/* Fade edges */
+.tt-words-clip::before,
+.tt-words-clip::after {
+    content: '';
+    position: absolute;
+    left: 0;
+    right: 0;
+    height: 1.4rem;
+    z-index: 2;
+    pointer-events: none;
+}
+
+.tt-words-clip::before {
+    top: 0;
+    background: linear-gradient(to bottom, var(--surface), transparent);
+}
+
+.tt-words-clip::after {
+    bottom: 0;
+    background: linear-gradient(to top, var(--surface), transparent);
+}
+
+.tt-words {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0 0.5em;
+    line-height: 2rem;
+    font-size: 1.15rem;
+    font-weight: 400;
+    color: var(--text-dim);
+    padding: 0.15rem 0.1rem;
+}
+
+.tt-word {
+    display: inline-flex;
+    white-space: nowrap;
+    position: relative;
+}
+
+.tt-space {
+    display: none; /* spacing handled by gap */
+}
+
+/* ── Character states ─────────────────────────────────────────────────────── */
+
+.tt-ch {
+    color: var(--text-dim);
+}
+
+.tt-ch.correct {
+    color: var(--text);
+}
+
+.tt-ch.wrong {
+    color: #ef4444;
+}
+
+.tt-ch.tt-overflow {
+    color: #ef4444;
+    opacity: 0.65;
+}
+
+/* Cursor caret before the next untyped character */
+.tt-ch.cursor {
+    position: relative;
+}
+
+.tt-ch.cursor::before {
+    content: '';
+    position: absolute;
+    left: -1px;
+    top: 15%;
+    height: 72%;
+    width: 2px;
+    background: var(--accent);
+    border-radius: 1px;
+    animation: blink-caret 0.75s ease-in-out infinite;
+}
+
+/* Cursor caret when word is fully typed (appended after last char) */
+.tt-cursor-end {
+    display: inline-block;
+    width: 2px;
+    height: 1.1em;
+    background: var(--accent);
+    border-radius: 1px;
+    vertical-align: middle;
+    margin-left: 1px;
+    animation: blink-caret 0.75s ease-in-out infinite;
+}
+
+@keyframes blink-caret {
+    0%, 100% { opacity: 1; }
+    50%       { opacity: 0; }
+}
+
+/* ── Attribution ─────────────────────────────────────────────────────────── */
+
+.tt-attribution {
+    font-size: 0.7rem;
+    color: var(--text-dim);
+    text-align: right;
+    margin: -0.5rem 0 0;
+    font-style: italic;
+    letter-spacing: 0.01em;
+}
+
+.tt-results-source {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    font-style: italic;
+    margin: -1rem 0 0;
+    text-align: center;
+}
+
+/* ── Hidden input ─────────────────────────────────────────────────────────── */
+
+.tt-ghost-input {
+    position: absolute;
+    opacity: 0;
+    pointer-events: none;
+    width: 1px;
+    height: 1px;
+    left: -9999px;
+    top: -9999px;
+}
+
+/* ── Hint ─────────────────────────────────────────────────────────────────── */
+
+.tt-cue {
+    font-size: 0.78rem;
+    color: var(--text-dim);
+    text-align: center;
+    margin: 0;
+    letter-spacing: 0.02em;
+}
+
+/* ── Results screen ───────────────────────────────────────────────────────── */
+
+.tt-results {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    padding: 1.25rem 0;
+}
+
+.tt-results-wpm {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.3rem;
+}
+
+.tt-big-num {
+    font-size: 5.5rem;
+    font-weight: 700;
+    color: var(--accent);
+    line-height: 1;
+    letter-spacing: -0.03em;
+}
+
+.tt-big-lbl {
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.16em;
+}
+
+.tt-results-row {
+    display: flex;
+    gap: 2.5rem;
+    justify-content: center;
+    flex-wrap: wrap;
+}
+
+.tt-results-stat {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.tt-results-val {
+    font-size: 1.6rem;
+    font-weight: 700;
+    color: var(--text);
+    line-height: 1;
+    letter-spacing: -0.01em;
+}
+
+.tt-results-val.correct-color { color: #22c55e; }
+.tt-results-val.wrong-color   { color: #ef4444; }
+
+.tt-pct {
+    font-size: 1.15rem;
+}
+
+.tt-results-lbl {
+    font-size: 0.62rem;
+    font-weight: 500;
+    color: var(--text-dim);
+    text-transform: uppercase;
+    letter-spacing: 0.12em;
+}
+
+.tt-restart-btn {
+    background: var(--accent);
+    color: #fff;
+    font-weight: 600;
+    font-size: 0.9rem;
+    padding: 0.65rem 2rem;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    font-family: inherit;
+    box-shadow: 0 4px 16px rgba(59, 130, 246, 0.3);
+    letter-spacing: 0.02em;
+}
+
+.tt-restart-btn:hover {
+    background: #60a5fa;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 22px rgba(59, 130, 246, 0.45);
+}
+
+.tt-restart-btn:active {
+    transform: translateY(0);
+}

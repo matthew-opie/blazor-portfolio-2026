@@ -1,15 +1,9 @@
-﻿@inherits LayoutComponentBase
-@inject NavigationManager NavManager
+@inherits LayoutComponentBase
 
-<div class="page">
-    <div class="sidebar">
-        <NavMenu/>
-    </div>
+<div class="layout">
+    <NavMenu />
     <main>
-        <div id="contextBar" class="top-row px-4">
-            <ContextBar Uri="@(NavManager.Uri[NavManager.BaseUri.Length..])"/>
-        </div>
-        <article class="content px-4">
+        <article class="content">
             @Body
         </article>
     </main>

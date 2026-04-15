@@ -1,0 +1,138 @@
+@page "/markdown"
+@using Markdig
+@inject IJSRuntime JS
+
+<PageTitle>mattopie.com — Markdown Previewer</PageTitle>
+
+<div id="markdown-previewer">
+
+    <div class="mp-toolbar">
+        <button class="mp-tool-btn" @onclick='() => Insert("**","**")' title="Bold"><i class="fa-solid fa-bold"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("*","*")'   title="Italic"><i class="fa-solid fa-italic"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("`","`")'   title="Inline code"><i class="fa-solid fa-code"></i></button>
+        <div class="mp-tool-sep"></div>
+        <button class="mp-tool-btn" @onclick='() => Insert("# ")'      title="Heading 1">H1</button>
+        <button class="mp-tool-btn" @onclick='() => Insert("## ")'     title="Heading 2">H2</button>
+        <button class="mp-tool-btn" @onclick='() => Insert("### ")'    title="Heading 3">H3</button>
+        <div class="mp-tool-sep"></div>
+        <button class="mp-tool-btn" @onclick='() => Insert("- ")'      title="Unordered list"><i class="fa-solid fa-list-ul"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("1. ")'     title="Ordered list"><i class="fa-solid fa-list-ol"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("[","](url)")' title="Link"><i class="fa-solid fa-link"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("\n```\n","\n```\n")' title="Code block"><i class="fa-solid fa-file-code"></i></button>
+        <button class="mp-tool-btn" @onclick='() => Insert("> ")'      title="Blockquote"><i class="fa-solid fa-quote-left"></i></button>
+        <div class="mp-toolbar-right">
+            <span class="mp-count">@_wordCount words &middot; @_charCount chars</span>
+            <button class="mp-copy-btn" @onclick="CopyHtml">
+                <i class="fa-solid @(_copied ? "fa-check" : "fa-copy")"></i>
+                @(_copied ? "Copied!" : "Copy HTML")
+            </button>
+        </div>
+    </div>
+
+    <div class="mp-body">
+        <div class="mp-pane">
+            <div class="mp-pane-label"><i class="fa-brands fa-markdown"></i> Markdown</div>
+            <textarea @ref="_editorRef"
+                      class="mp-editor"
+                      spellcheck="false"
+                      autocorrect="off"
+                      autocapitalize="off"
+                      placeholder="Start writing markdown..."
+                      @oninput="OnInput"></textarea>
+        </div>
+
+        <div class="mp-gutter"></div>
+
+        <div class="mp-pane">
+            <div class="mp-pane-label"><i class="fa-solid fa-eye"></i> Preview</div>
+            <div class="mp-preview">
+                @((MarkupString)_renderedHtml)
+            </div>
+        </div>
+    </div>
+
+</div>
+
+@code {
+
+    private static readonly MarkdownPipeline Pipeline =
+        new MarkdownPipelineBuilder().UseAdvancedExtensions().Build();
+
+    private static readonly string DefaultMarkdown =
+        "# Markdown Previewer\n\n" +
+        "Type on the left, preview on the right.\n\n" +
+        "## Text Formatting\n\n" +
+        "Write **bold**, *italic*, or `inline code` with ease.\n\n" +
+        "## Code Blocks\n\n" +
+        "```csharp\n" +
+        "var message = \"Hello, World!\";\n" +
+        "Console.WriteLine(message);\n" +
+        "```\n\n" +
+        "## Lists\n\n" +
+        "- Item one\n" +
+        "- Item two\n" +
+        "  - Nested item\n\n" +
+        "1. First\n" +
+        "2. Second\n" +
+        "3. Third\n\n" +
+        "## Tables\n\n" +
+        "| Language | Paradigm    | Year |\n" +
+        "|----------|-------------|------|\n" +
+        "| C#       | Multi       | 2000 |\n" +
+        "| Python   | Multi       | 1991 |\n" +
+        "| Rust     | Systems     | 2015 |\n\n" +
+        "## Blockquote\n\n" +
+        "> The best way to predict the future is to invent it.\n\n" +
+        "---\n\n" +
+        "[Learn more about Markdown](https://commonmark.org)\n";
+
+    private ElementReference _editorRef;
+    private string _markdown       = DefaultMarkdown;
+    private string _renderedHtml   = "";
+    private bool   _copied         = false;
+    private bool   _firstRender    = true;
+
+    private int _wordCount => string.IsNullOrWhiteSpace(_markdown) ? 0
+        : _markdown.Split(new[] { ' ', '\n', '\r', '\t' }, StringSplitOptions.RemoveEmptyEntries).Length;
+    private int _charCount => _markdown.Length;
+
+    protected override void OnInitialized() => Render();
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            await JS.InvokeVoidAsync("markdownEditor.init", _editorRef, DefaultMarkdown);
+            _firstRender = false;
+        }
+    }
+
+    private void OnInput(ChangeEventArgs e)
+    {
+        _markdown = e.Value?.ToString() ?? "";
+        Render();
+    }
+
+    private async Task Insert(string before, string after = "")
+    {
+        _markdown = await JS.InvokeAsync<string>("markdownEditor.insertAtCursor", _editorRef, before, after);
+        Render();
+    }
+
+    private void Render() =>
+        _renderedHtml = Markdown.ToHtml(_markdown, Pipeline);
+
+    private async Task CopyHtml()
+    {
+        try
+        {
+            await JS.InvokeVoidAsync("navigator.clipboard.writeText", _renderedHtml);
+            _copied = true;
+            StateHasChanged();
+            await Task.Delay(1800);
+            _copied = false;
+            StateHasChanged();
+        }
+        catch { }
+    }
+}

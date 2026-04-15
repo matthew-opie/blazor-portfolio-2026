@@ -1,0 +1,407 @@
+@page "/typing"
+@inject IJSRuntime JS
+@inject HttpClient Http
+@implements IAsyncDisposable
+@using System.Text.Json.Serialization
+
+<PageTitle>@_pageTitle</PageTitle>
+
+<div id="typing-test" class="card">
+
+    @if (_loading)
+    {
+        <p class="tt-cue">Loading...</p>
+    }
+    else @if (_phase == Phase.Results)
+    {
+        <div class="tt-results">
+            <div class="tt-results-wpm">
+                <span class="tt-big-num">@_finalWpm</span>
+                <span class="tt-big-lbl">wpm</span>
+            </div>
+            <div class="tt-results-row">
+                <div class="tt-results-stat">
+                    <span class="tt-results-val">@_finalAcc<span class="tt-pct">%</span></span>
+                    <span class="tt-results-lbl">accuracy</span>
+                </div>
+                <div class="tt-results-stat">
+                    <span class="tt-results-val correct-color">@_correctChars</span>
+                    <span class="tt-results-lbl">correct</span>
+                </div>
+                <div class="tt-results-stat">
+                    <span class="tt-results-val wrong-color">@_wrongChars</span>
+                    <span class="tt-results-lbl">wrong</span>
+                </div>
+                <div class="tt-results-stat">
+                    <span class="tt-results-val">@_elapsedSeconds<span class="tt-pct">s</span></span>
+                    <span class="tt-results-lbl">time</span>
+                </div>
+            </div>
+            <p class="tt-results-source">@_attribution</p>
+            <button class="tt-restart-btn" @onclick="Restart">
+                <i class="fa-solid fa-rotate-right"></i> Next Passage
+            </button>
+        </div>
+    }
+    else
+    {
+        <div class="tt-top-bar">
+            <div class="tt-live-stat">
+                <span class="tt-live-val @(_phase != Phase.Typing ? "tt-muted" : "")">@_liveWpm</span>
+                <span class="tt-live-lbl">wpm</span>
+            </div>
+            <div class="tt-countdown @(_timeLeft <= 10 && _phase == Phase.Typing ? "tt-urgent" : "")">
+                @_timeLeft
+            </div>
+            <div class="tt-live-stat">
+                <span class="tt-live-val @(_phase != Phase.Typing ? "tt-muted" : "")">@_liveAcc<span class="tt-pct-sm">%</span></span>
+                <span class="tt-live-lbl">acc</span>
+            </div>
+        </div>
+
+        <div class="tt-words-clip" @ref="_clipRef" @onclick="FocusInput">
+            <div class="tt-words" @ref="_wordsRef">
+                @for (int wi = 0; wi < _words.Length; wi++)
+                {
+                    var word    = _words[wi];
+                    var wIdx    = wi;
+                    var results = _charResults[wIdx];
+
+                    <span class="tt-word" id="ttw-@wIdx">
+                        @for (int ci = 0; ci < word.Length; ci++)
+                        {
+                            var ch   = word[ci];
+                            var cIdx = ci;
+                            var cls  = CharClass(wIdx, cIdx, results);
+                            <span class="tt-ch @cls">@ch</span>
+                        }
+                        @if (wIdx == _wordIndex && _currentInput.Length > word.Length)
+                        {
+                            @for (int ci = word.Length; ci < _currentInput.Length; ci++)
+                            {
+                                var extra = _currentInput[ci];
+                                <span class="tt-ch wrong tt-overflow">@extra</span>
+                            }
+                        }
+                        @if (wIdx == _wordIndex && _currentInput.Length >= word.Length)
+                        {
+                            <span class="tt-cursor-end"></span>
+                        }
+                    </span><span class="tt-space"> </span>
+                }
+            </div>
+        </div>
+
+        <p class="tt-attribution">@_attribution</p>
+
+        @if (_phase == Phase.Idle)
+        {
+            <p class="tt-cue"><i class="fa-regular fa-keyboard"></i>&nbsp; Click above or start typing</p>
+        }
+    }
+
+    @* Always in DOM so focus is never lost on re-render *@
+    <input @ref="_inputRef"
+           class="tt-ghost-input"
+           type="text"
+           autocomplete="off"
+           autocorrect="off"
+           autocapitalize="off"
+           spellcheck="false"
+           tabindex="0"
+           @oninput="HandleInput"
+           @onkeydown="HandleKeyDown" />
+
+</div>
+
+@code {
+
+    // ── Passage data ─────────────────────────────────────────────────────────
+    private class Passage
+    {
+        [JsonPropertyName("attribution")] public string Attribution { get; set; } = "";
+        [JsonPropertyName("text")]        public string Text        { get; set; } = "";
+    }
+
+    private Passage[] _allPassages = Array.Empty<Passage>();
+    private bool      _loading     = true;
+
+    private const int TimerLength = 60;
+
+    // ── Phase ────────────────────────────────────────────────────────────────
+    private enum Phase { Idle, Typing, Results }
+    private Phase _phase = Phase.Idle;
+
+    // ── Passage queue (no repeats until all seen) ────────────────────────────
+    private readonly Queue<int> _passageQueue = new();
+
+    private int NextPassageIndex()
+    {
+        if (_passageQueue.Count == 0)
+        {
+            var rng = new Random();
+            foreach (var i in Enumerable.Range(0, _allPassages.Length).OrderBy(_ => rng.Next()))
+                _passageQueue.Enqueue(i);
+        }
+        return _passageQueue.Dequeue();
+    }
+
+    // ── Passage state ────────────────────────────────────────────────────────
+    private string    _attribution  = "";
+    private string[]  _words        = Array.Empty<string>();
+    private int       _wordIndex    = 0;
+    private string    _currentInput = "";
+    private string[]  _typedWords   = Array.Empty<string>();
+    private bool[]?[] _charResults  = Array.Empty<bool[]?>();
+    private bool[]    _wordCorrect  = Array.Empty<bool>();
+
+    // ── Stats ────────────────────────────────────────────────────────────────
+    private int _correctChars   = 0;
+    private int _wrongChars     = 0;
+    private int _liveWpm        = 0;
+    private int _liveAcc        = 100;
+    private int _finalWpm       = 0;
+    private int _finalAcc       = 0;
+    private int _elapsedSeconds = 0;
+
+    // ── Timer ────────────────────────────────────────────────────────────────
+    private int                      _timeLeft = TimerLength;
+    private CancellationTokenSource? _cts;
+    private DateTime                 _startTime;
+
+    // ── DOM refs ─────────────────────────────────────────────────────────────
+    private ElementReference _inputRef;
+    private ElementReference _clipRef;
+    private ElementReference _wordsRef;
+
+    private string _pageTitle => _phase == Phase.Typing
+        ? $"{_liveWpm} WPM — Typing Test"
+        : "mattopie.com — Typing Test";
+
+    // ── Lifecycle ────────────────────────────────────────────────────────────
+
+    protected override async Task OnInitializedAsync()
+    {
+        _allPassages = await Http.GetFromJsonAsync<Passage[]>("data/passages.json")
+                       ?? Array.Empty<Passage>();
+        _loading = false;
+        BuildPassage();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+            await JS.InvokeVoidAsync("typingTest.init", _inputRef);
+    }
+
+    private void BuildPassage()
+    {
+        if (_allPassages.Length == 0) return;
+        var passage = _allPassages[NextPassageIndex()];
+
+        _attribution  = passage.Attribution;
+        _words        = passage.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        _charResults  = new bool[]?[_words.Length];
+        _wordCorrect  = new bool[_words.Length];
+        _typedWords   = new string[_words.Length];
+        _wordIndex    = 0;
+        _currentInput = "";
+        _correctChars = 0;
+        _wrongChars   = 0;
+        _liveWpm      = 0;
+        _liveAcc      = 100;
+        _elapsedSeconds = 0;
+        _timeLeft     = TimerLength;
+        _phase        = Phase.Idle;
+    }
+
+    private async Task Restart()
+    {
+        CancelTimer();
+        BuildPassage();
+        StateHasChanged();
+        await Task.Yield();
+        await JS.InvokeVoidAsync("typingTest.init", _inputRef);
+    }
+
+    private async Task FocusInput() =>
+        await JS.InvokeVoidAsync("typingTest.focus", _inputRef);
+
+    // ── Character class helper ───────────────────────────────────────────────
+
+    private string CharClass(int wordIdx, int charIdx, bool[]? results)
+    {
+        if (wordIdx < _wordIndex)
+            return results != null && charIdx < results.Length && results[charIdx] ? "correct" : "wrong";
+
+        if (wordIdx == _wordIndex)
+        {
+            if (charIdx < _currentInput.Length)
+                return _currentInput[charIdx] == _words[wordIdx][charIdx] ? "correct" : "wrong";
+            if (charIdx == _currentInput.Length)
+                return "cursor";
+            return "";
+        }
+
+        return "";
+    }
+
+    // ── Input handling ───────────────────────────────────────────────────────
+
+    private async Task HandleInput(ChangeEventArgs e)
+    {
+        var val = e.Value?.ToString() ?? "";
+
+        if (_phase == Phase.Idle && val.Length > 0)
+        {
+            _phase     = Phase.Typing;
+            _startTime = DateTime.UtcNow;
+            _cts       = new CancellationTokenSource();
+            _ = RunTimerAsync(_cts.Token);
+        }
+
+        if (_phase != Phase.Typing) return;
+
+        if (val.EndsWith(' '))
+        {
+            _currentInput = val.TrimEnd();
+            await CommitWord();
+            return;
+        }
+
+        _currentInput = val;
+        UpdateLiveStats();
+        StateHasChanged();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Backspace" && _currentInput.Length == 0
+            && _wordIndex > 0 && _phase == Phase.Typing)
+        {
+            var prevIdx    = _wordIndex - 1;
+            var prevTyped  = _typedWords[prevIdx];
+            var prevTarget = _words[prevIdx];
+
+            if (_charResults[prevIdx] != null)
+            {
+                foreach (var ok in _charResults[prevIdx]!)
+                    if (ok) _correctChars--; else _wrongChars--;
+                _wrongChars -= Math.Max(0, prevTyped.Length - prevTarget.Length);
+                _wrongChars  = Math.Max(0, _wrongChars);
+            }
+
+            _charResults[prevIdx] = null;
+            _wordCorrect[prevIdx] = false;
+            _typedWords[prevIdx]  = "";
+            _wordIndex--;
+            _currentInput = prevTyped;
+
+            await JS.InvokeVoidAsync("typingTest.setInputValue", _inputRef, prevTyped);
+            UpdateLiveStats();
+            StateHasChanged();
+            await ScrollCurrentWord();
+        }
+    }
+
+    private async Task CommitWord()
+    {
+        if (_phase != Phase.Typing) return;
+
+        var target = _words[_wordIndex];
+        var typed  = _currentInput;
+
+        var results = new bool[target.Length];
+        int correct = 0, wrong = 0;
+
+        for (int i = 0; i < target.Length; i++)
+        {
+            bool ok = i < typed.Length && typed[i] == target[i];
+            results[i] = ok;
+            if (ok) correct++; else wrong++;
+        }
+        wrong += Math.Max(0, typed.Length - target.Length);
+
+        _typedWords[_wordIndex]  = typed;
+        _charResults[_wordIndex] = results;
+        _wordCorrect[_wordIndex] = typed == target;
+        _correctChars += correct;
+        _wrongChars   += wrong;
+        _wordIndex++;
+        _currentInput = "";
+
+        await JS.InvokeVoidAsync("typingTest.clearInput", _inputRef);
+
+        if (_wordIndex >= _words.Length)
+        {
+            FinishTest();
+            return;
+        }
+
+        UpdateLiveStats();
+        StateHasChanged();
+        await ScrollCurrentWord();
+    }
+
+    private async Task ScrollCurrentWord()
+    {
+        if (_wordIndex < _words.Length)
+            await JS.InvokeVoidAsync("typingTest.scrollToWord", _clipRef, $"ttw-{_wordIndex}");
+    }
+
+    private void UpdateLiveStats()
+    {
+        if (_phase != Phase.Typing) return;
+        var elapsed = (DateTime.UtcNow - _startTime).TotalMinutes;
+        if (elapsed < 0.001) { _liveWpm = 0; _liveAcc = 100; return; }
+        _liveWpm = (int)Math.Round(_correctChars / 5.0 / elapsed);
+        int total = _correctChars + _wrongChars;
+        _liveAcc  = total > 0 ? (int)Math.Round(_correctChars * 100.0 / total) : 100;
+    }
+
+    private void FinishTest()
+    {
+        CancelTimer();
+        var elapsed = Math.Max((DateTime.UtcNow - _startTime).TotalMinutes, 1.0 / 60);
+        _elapsedSeconds = (int)Math.Round(elapsed * 60);
+        _finalWpm = (int)Math.Round(_correctChars / 5.0 / elapsed);
+        int total = _correctChars + _wrongChars;
+        _finalAcc = total > 0 ? (int)Math.Round(_correctChars * 100.0 / total) : 100;
+        _phase    = Phase.Results;
+        StateHasChanged();
+    }
+
+    // ── Timer ────────────────────────────────────────────────────────────────
+
+    private async Task RunTimerAsync(CancellationToken ct)
+    {
+        while (_timeLeft > 0)
+        {
+            try   { await Task.Delay(1000, ct); }
+            catch (OperationCanceledException) { return; }
+
+            _timeLeft--;
+            UpdateLiveStats();
+            StateHasChanged();
+
+            if (_timeLeft == 0)
+            {
+                FinishTest();
+                return;
+            }
+        }
+    }
+
+    private void CancelTimer()
+    {
+        _cts?.Cancel();
+        _cts?.Dispose();
+        _cts = null;
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        CancelTimer();
+        return ValueTask.CompletedTask;
+    }
+}

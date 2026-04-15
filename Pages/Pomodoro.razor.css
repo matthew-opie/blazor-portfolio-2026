@@ -1,53 +1,264 @@
-﻿#pomodoro {
-    background-color: tomato !important;
-    border-radius: 100px !important;
-    padding-top: 50px;
-    padding-bottom: 50px;
+#pomodoro {
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 1.75rem 1.5rem 1.5rem;
     display: flex;
     flex-direction: column;
-    justify-content: center;
     align-items: center;
-    z-index: 3;
+    gap: 1.5rem;
+    border-radius: 20px !important;
+    transition: background 0.5s ease, box-shadow 0.5s ease;
 }
 
-.timer-type-buttons, .action-buttons {
-    width: 75%;
+/* Mode themes */
+#pomodoro.mode-pomodoro {
+    background: linear-gradient(145deg, #9e2820, #c0392b) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 12px 48px rgba(180, 40, 30, 0.45) !important;
+}
+
+#pomodoro.mode-short-break {
+    background: linear-gradient(145deg, #116649, #1a8a61) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 12px 48px rgba(26, 138, 97, 0.45) !important;
+}
+
+#pomodoro.mode-long-break {
+    background: linear-gradient(145deg, #1a3f7a, #1e52a3) !important;
+    border-color: rgba(255, 255, 255, 0.08) !important;
+    box-shadow: 0 12px 48px rgba(30, 82, 163, 0.45) !important;
+}
+
+/* Mode tabs */
+.mode-tabs {
     display: flex;
-    flex-direction: row;
-    justify-content: space-around;
-    margin-top: 0.5em;
-    margin-bottom: 0.5em;
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 8px;
+    padding: 3px;
+    gap: 2px;
+    width: 100%;
 }
 
-.neumorph {
-    color: ivory;
-    font-weight: 600;
-    background-color: tomato;
-    box-shadow: -2px -2px 5px 0 rgba(0, 0, 0, 0.3) inset, 3px 3px 2px 0 rgba(255, 255, 255, 0.25) inset;
+.tab {
+    flex: 1;
+    background: transparent;
     border: none;
-    border-radius: 50px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    padding: 3px 10px 3px 10px;
-    margin: 0.25em 0.5em 0.25em 0.5em;
-    height: 4em;
-    width: 10em;
+    color: rgba(255, 255, 255, 0.55);
+    font-size: 0.78rem;
+    font-weight: 500;
+    padding: 0.4rem 0.4rem;
+    border-radius: 6px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    font-family: inherit;
+    white-space: nowrap;
 }
 
-.neumorph:active {
-    box-shadow: 2px 2px 5px 0 rgba(0, 0, 0, 0.3) inset, -3px -3px 2px 0 rgba(255, 255, 255, 0.25) inset;
-    color: lightgrey;
-    text-shadow: 0px 0px 10px 0 rgba(255, 255, 255, 0.25);
+.tab:hover {
+    color: rgba(255, 255, 255, 0.8);
+}
+
+.tab.active {
+    background: rgba(255, 255, 255, 0.18);
+    color: #fff;
+    font-weight: 600;
+}
+
+.tab-dot {
+    display: inline-block;
+    width: 5px;
+    height: 5px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.85);
+    margin-left: 5px;
+    vertical-align: middle;
+    animation: pulse-dot 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% { opacity: 0.4; transform: scale(0.85); }
+    50%       { opacity: 1;   transform: scale(1.15); }
+}
+
+/* Progress ring */
+.ring-wrapper {
+    position: relative;
+    width: 220px;
+    height: 220px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.progress-ring {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+}
+
+.ring-bg {
+    fill: none;
+    stroke: rgba(0, 0, 0, 0.2);
+    stroke-width: 8;
+}
+
+.ring-fill {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.85);
+    stroke-width: 8;
+    stroke-linecap: round;
+}
+
+.ring-content {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.25rem;
 }
 
 .time-display {
-    font-size: 10vh;
-    font-weight: 500;
-    margin-top: -0.1em;
+    font-size: 3.25rem;
+    font-weight: 700;
+    color: #fff;
+    letter-spacing: 0.03em;
+    line-height: 1;
     cursor: default;
+    text-shadow: 0 2px 16px rgba(0, 0, 0, 0.3);
 }
 
-h3 {
-    letter-spacing: 0.2em;
+.ring-label {
+    font-size: 0.7rem;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+    letter-spacing: 0.14em;
+}
+
+/* Session tracker */
+.session-track {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.session-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.2);
+    border: 1.5px solid rgba(255, 255, 255, 0.3);
+    transition: background 0.3s, border-color 0.3s;
+}
+
+.session-dot.filled {
+    background: rgba(255, 255, 255, 0.85);
+    border-color: rgba(255, 255, 255, 0.85);
+}
+
+.session-label {
+    font-size: 0.72rem;
+    color: rgba(255, 255, 255, 0.45);
+    margin-left: 0.25rem;
+    letter-spacing: 0.04em;
+}
+
+/* Action row */
+.action-row {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-main {
+    background: rgba(255, 255, 255, 0.95);
+    color: #1a1a1a;
+    font-weight: 700;
+    font-size: 0.95rem;
+    padding: 0.7rem 2.25rem;
+    border: none;
+    border-radius: 50px;
+    cursor: pointer;
+    transition: background 0.2s, transform 0.15s, box-shadow 0.2s;
+    font-family: inherit;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.25);
+    white-space: nowrap;
+    letter-spacing: 0.01em;
+}
+
+.btn-main:hover {
+    background: #fff;
+    transform: translateY(-2px);
+    box-shadow: 0 6px 22px rgba(0, 0, 0, 0.3);
+}
+
+.btn-main:active {
+    transform: translateY(0);
+}
+
+.btn-minor {
+    background: rgba(0, 0, 0, 0.18);
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.82rem;
+    font-weight: 500;
+    padding: 0.65rem 1.25rem;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 50px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+    font-family: inherit;
+}
+
+.btn-minor:hover:not(:disabled) {
+    background: rgba(0, 0, 0, 0.28);
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.btn-minor:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+}
+
+/* Notification hint */
+.notification-hint {
+    font-size: 0.7rem;
+    color: rgba(255, 255, 255, 0.35);
+    text-align: center;
+    margin: 0;
+    padding: 0 0.5rem;
+    line-height: 1.5;
+}
+
+.notification-hint i {
+    margin-right: 0.3rem;
+}
+
+/* Debug button */
+.debug-btn {
+    background: rgba(0, 0, 0, 0.15);
+    border: 1px dashed rgba(255, 255, 255, 0.18);
+    color: rgba(255, 255, 255, 0.35);
+    font-size: 0.68rem;
+    font-weight: 500;
+    padding: 0.3rem 0.8rem;
+    border-radius: 6px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    letter-spacing: 0.02em;
+}
+
+.debug-btn:hover {
+    color: rgba(255, 255, 255, 0.65);
+    border-color: rgba(255, 255, 255, 0.35);
+    background: rgba(0, 0, 0, 0.25);
+}
+
+.debug-btn i {
+    margin-right: 0.3rem;
+    font-size: 0.62rem;
 }

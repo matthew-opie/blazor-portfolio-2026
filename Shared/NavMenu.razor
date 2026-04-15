@@ -1,40 +1,39 @@
-﻿<div class="top-row ps-3 navbar navbar-dark">
-    <div class="container-fluid">
-        <a class="navbar-brand" href="">mattopie.com</a>
-        <button title="Navigation menu" class="navbar-toggler" @onclick="ToggleNavMenu">
-            <span class="navbar-toggler-icon"></span>
-        </button>
-    </div>
-</div>
+<nav class="topnav">
+    <a class="brand" href="">Matt Opie</a>
 
-<div class="@NavMenuCssClass" @onclick="ToggleNavMenu">
-    <nav class="flex-column">
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="" Match="NavLinkMatch.All">
-                <span class="fa-solid fa-house-chimney-window" aria-hidden="true"></span><span class="nav-label">Home</span>
-            </NavLink>
+    <button class="nav-toggle" @onclick="ToggleMenu" aria-label="Toggle navigation">
+        <span></span>
+        <span></span>
+        <span></span>
+    </button>
+
+    <div class="nav-body @(menuOpen ? "open" : "")">
+        <div class="nav-links">
+            <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
+            <NavLink href="resume">Résumé</NavLink>
+            <NavLink href="portfolio">Portfolio</NavLink>
+            <NavLink href="pomodoro">Timer</NavLink>
+            <NavLink href="typing">Typing</NavLink>
+            <NavLink href="markdown">Markdown</NavLink>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="resume">
-                <span class="fa-solid fa-file" aria-hidden="true"></span><span class="nav-label">Résumé</span>
-            </NavLink>
+        <div class="nav-actions">
+            <a href="https://github.com/matthew-opie" target="_blank" title="GitHub" aria-label="GitHub">
+                <i class="fa-brands fa-github"></i>
+            </a>
+            <a href="https://www.linkedin.com/in/matthew-opie/" target="_blank" title="LinkedIn" aria-label="LinkedIn">
+                <i class="fa-brands fa-linkedin"></i>
+            </a>
+            <a href="mailto:matt@mattopie.com" title="Email" aria-label="Email">
+                <i class="fa-solid fa-envelope"></i>
+            </a>
+            <a class="btn-resume" href="/documents/resume.pdf" download>
+                <i class="fa-solid fa-download"></i> Resume
+            </a>
         </div>
-        <div class="nav-item px-3">
-            <NavLink class="nav-link" href="portfolio">
-                <span class="fa-solid fa-code" aria-hidden="true"></span><span class="nav-label">Portfolio</span>
-            </NavLink>
-        </div>
-    </nav>
-</div>
+    </div>
+</nav>
 
 @code {
-    private bool _collapseNavMenu = true;
-
-    private string? NavMenuCssClass => _collapseNavMenu ? "collapse" : null;
-
-    private void ToggleNavMenu()
-    {
-        _collapseNavMenu = !_collapseNavMenu;
-    }
-
+    private bool menuOpen = false;
+    private void ToggleMenu() => menuOpen = !menuOpen;
 }

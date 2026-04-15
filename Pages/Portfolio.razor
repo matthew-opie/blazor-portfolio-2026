@@ -1,4 +1,4 @@
-﻿@page "/portfolio"
+@page "/portfolio"
 
 <PageTitle>mattopie.com - Portfolio</PageTitle>
 <div class="headers">
@@ -34,15 +34,13 @@
                 <li class="tag">Cloudflare DNS</li>
             </ul>
         </div>
-
     </div>
 </div>
-
 
 <div class="project-container card">
     <div class="project-title">
         <div>
-            <a class="project-link" href="/pomodoro" target="_blank">
+            <a class="project-link" href="/pomodoro">
                 <h4>Tomato Timer</h4>
             </a>
         </div>
@@ -50,13 +48,11 @@
     </div>
 
     <div class="project-description">
-        <p>A productivity-focused timer based on the Pomodoro Technique</p>
+        <p>A productivity-focused timer based on the Pomodoro Technique.</p>
         <p>
-            This was a simple project to create a helpful tool for myself.
-            I wanted to create a timer that would help me focus on my work and keep me from getting distracted.
-            It was an exploration into Blazor actions, service providers, and executing an idea.
-            I included Neumorph-style buttons to add a sense of depth to the UI and wanted to experiment with using HTML5 notifications and the Javascript Vibration API.
-            @*I later added task-tracking and persistent local storage to add another layer to the project.*@
+            Features three independent timers — Focus, Short Break, and Long Break — each running in their own
+            state with animated progress rings and color-coded themes. Browser notifications and the Vibration API
+            fire on completion. A session dot tracker counts completed pomodoros and auto-suggests the next break type.
         </p>
     </div>
     <div class="project-tags">
@@ -64,8 +60,69 @@
             <p>Technologies used:</p>
             <ul class="tag-group">
                 <li class="tag">.NET Blazor</li>
-                <li class="tag">HTML5</li>
-                <li class="tag">CSS3</li>
+                <li class="tag">C#</li>
+                <li class="tag">JS Interop</li>
+                <li class="tag">Web Notifications API</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="project-container card">
+    <div class="project-title">
+        <div>
+            <a class="project-link" href="/typing">
+                <h4>Typing Speed Test</h4>
+            </a>
+        </div>
+    </div>
+    <div class="project-description">
+        <p>A live WPM typing test built around passages from public domain literature.</p>
+        <p>
+            Passages are loaded from an external JSON file and shuffled into a non-repeating queue each session.
+            Text is scored character-by-character in real time with green/red feedback per keystroke. The test ends
+            when the passage is complete or the 60-second timer expires, then reports WPM, accuracy, and elapsed time.
+            Backspace support allows correcting the previous word mid-test.
+        </p>
+    </div>
+    <div class="project-tags">
+        <div class="tags-label">
+            <p>Technologies used:</p>
+            <ul class="tag-group">
+                <li class="tag">.NET Blazor</li>
+                <li class="tag">C#</li>
+                <li class="tag">JS Interop</li>
+                <li class="tag">JSON</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="project-container card">
+    <div class="project-title">
+        <div>
+            <a class="project-link" href="/markdown">
+                <h4>Markdown Previewer</h4>
+            </a>
+        </div>
+    </div>
+    <div class="project-description">
+        <p>A live split-pane Markdown editor with instant HTML preview.</p>
+        <p>
+            Renders Markdown to HTML in real time using the Markdig library with the CommonMark spec, supporting
+            tables, fenced code blocks, task lists, and autolinks. A toolbar provides one-click insertion of common
+            syntax at the cursor position with selected text wrapping. Includes a live word and character counter
+            and a Copy HTML button.
+        </p>
+    </div>
+    <div class="project-tags">
+        <div class="tags-label">
+            <p>Technologies used:</p>
+            <ul class="tag-group">
+                <li class="tag">.NET Blazor</li>
+                <li class="tag">C#</li>
+                <li class="tag">Markdig</li>
+                <li class="tag">JS Interop</li>
             </ul>
         </div>
     </div>
