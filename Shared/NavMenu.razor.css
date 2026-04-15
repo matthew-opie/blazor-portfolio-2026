@@ -127,7 +127,7 @@
     background: var(--text);
 }
 
-@media (max-width: 640px) {
+@media (max-width: 860px) {
     .topnav {
         padding: 0 1.25rem;
     }
