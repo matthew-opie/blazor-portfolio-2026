@@ -1,0 +1,290 @@
+@page "/cv"
+@layout FullWidthLayout
+@inject IJSRuntime JS
+@implements IAsyncDisposable
+
+<PageTitle>Comp Vision</PageTitle>
+
+<div class="cv-page">
+    <h2 class="cv-title">Comp Vision</h2>
+
+    <div class="cv-layout">
+
+        <!-- Left: Tools -->
+        <div class="cv-panel cv-tools">
+            <div class="panel-label">Tools</div>
+            @foreach (var algo in _algorithms)
+            {
+                var a = algo;
+                <button class="tool-btn @(_selected.Id == a.Id ? "active" : "")"
+                        @onclick="() => SelectAlgorithm(a)">
+                    @a.Name
+                </button>
+            }
+        </div>
+
+        <!-- Center: Main Screen -->
+        <div class="cv-main">
+            @if (_statusMsg is not null)
+            {
+                <div class="cv-status">@_statusMsg</div>
+            }
+            <video @ref="_videoRef" autoplay playsinline muted style="display:none"></video>
+            <canvas @ref="_canvasRef"
+                    class="cv-canvas @(_ready ? "visible" : "") @(_eyedropperMode ? "eyedropper" : "")"
+                    @onclick="OnCanvasClick"></canvas>
+        </div>
+
+        <!-- Right: Controls -->
+        <div class="cv-panel cv-controls">
+            <div class="panel-label">Sliders</div>
+
+            <div class="sliders">
+                @if (_selected.Params.Count == 0)
+                {
+                    <span class="no-params">No parameters</span>
+                }
+                @foreach (var p in _selected.Params)
+                {
+                    var param = p;
+                    <div class="slider-group @(_openInfo == param.Id ? "info-open" : "")">
+                        <div class="slider-header">
+                            <span class="slider-label">@param.Label</span>
+                            <div class="slider-header-right">
+                                <span class="slider-value">@param.Value.ToString("0.##")</span>
+                                @if (!string.IsNullOrEmpty(param.Description))
+                                {
+                                    <button class="info-btn"
+                                            title="@param.Description"
+                                            @onclick="() => ToggleInfo(param.Id)"
+                                            aria-label="Info about @param.Label">i</button>
+                                }
+                            </div>
+                        </div>
+                        <input type="range"
+                               min="@param.Min.ToString("0.##")"
+                               max="@param.Max.ToString("0.##")"
+                               step="@param.Step.ToString("0.##")"
+                               value="@param.Value.ToString("0.##")"
+                               @oninput="e => OnParamChange(param, e)" />
+                        @if (!string.IsNullOrEmpty(param.Description))
+                        {
+                            <div class="slider-desc">@param.Description</div>
+                        }
+                    </div>
+                }
+            </div>
+
+            @if (_selected.Id == "colorDetect")
+            {
+                <div class="color-picker-section">
+                    <div class="color-picker-row">
+                        <div class="color-swatch" style="background: rgb(@_colorR, @_colorG, @_colorB)"></div>
+                        <input type="color"
+                               value="@ColorHex"
+                               @oninput="OnColorInputChange"
+                               title="Open color picker" />
+                        <button class="eyedropper-btn @(_eyedropperMode ? "active" : "")"
+                                title="@(_eyedropperMode ? "Cancel — click image to sample" : "Sample color from image")"
+                                @onclick="ToggleEyedropper">
+                            <i class="fa-solid fa-eye-dropper"></i>
+                        </button>
+                    </div>
+                    @if (_eyedropperMode)
+                    {
+                        <div class="eyedropper-hint">Image frozen. Click any pixel to sample its color.</div>
+                    }
+                </div>
+            }
+
+            <div class="cv-options">
+                <label class="option-check">
+                    <input type="checkbox" @bind="_mirror" @bind:after="OnMirrorChange" />
+                    Mirror
+                </label>
+                <label class="option-check">
+                    <input type="checkbox" @bind="_paused" @bind:after="OnPauseChange" />
+                    Pause
+                </label>
+                <label class="option-check">
+                    <input type="checkbox" @bind="_showFps" @bind:after="OnShowFpsChange" />
+                    Show FPS
+                </label>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+@code {
+    // ── Models ────────────────────────────────────────────────────────────────
+
+    class AlgoParam(string id, string label, double min, double max, double value, double step = 1, string description = "")
+    {
+        public string Id          { get; } = id;
+        public string Label       { get; } = label;
+        public double Min         { get; } = min;
+        public double Max         { get; } = max;
+        public double Value       { get; set; } = value;
+        public double Step        { get; } = step;
+        public string Description { get; } = description;
+    }
+
+    record AlgorithmDef(string Id, string Name, List<AlgoParam> Params);
+
+    // ── Algorithm definitions ─────────────────────────────────────────────────
+
+    static readonly List<AlgorithmDef> _algorithms =
+    [
+        new("passthrough", "Passthrough",  []),
+        new("grayscale",   "Grayscale",    []),
+        new("invert",      "Invert",       []),
+        new("blur",        "Gaussian Blur",
+        [
+            new("kernelSize", "Kernel Size", 1,    31,  5,    2,    "Size of the blur kernel in pixels. Must be odd. Larger values produce a stronger, wider blur."),
+            new("sigma",      "Sigma",       0,    10,  0,    0.1,  "Gaussian standard deviation. 0 = auto-derived from kernel size. Higher values spread the blur further."),
+        ]),
+        new("canny",       "Canny Edge",
+        [
+            new("low",  "Low Threshold",  0, 300, 50,  1, "Edges with gradient strength below this are discarded entirely. Lower values keep more weak edges."),
+            new("high", "High Threshold", 0, 300, 150, 1, "Edges above this are always kept. Edges between low and high are kept only if connected to a strong edge."),
+        ]),
+        new("threshold",   "Threshold",
+        [
+            new("thresh", "Threshold", 0, 255, 127, 1, "Pixel intensity cutoff (0 to 255). Pixels brighter than this become white; darker pixels become black."),
+        ]),
+        new("colorDetect", "Color Detection",
+        [
+            new("tolerance", "Hue Tolerance", 1,  60,  25, 1, "How wide a hue angle to match around the target color. Higher values detect more color variants."),
+            new("satMin",    "Sat. Minimum",  0,  255, 30, 1, "Minimum saturation required to match. Raise this to exclude grays and near-white pixels."),
+        ]),
+        new("faceDetect",  "Face Detection",
+        [
+            new("minSize",      "Min Size",      20,   200, 80,  5,    "Smallest face (in pixels) to detect. Increase to skip small or distant faces and improve performance."),
+            new("scaleFactor",  "Scale Factor",  1.05, 2.0, 1.1, 0.05, "How aggressively the image is downscaled between detection passes. Lower values are more thorough but slower."),
+            new("minNeighbors", "Min Neighbors", 1,    10,  3,   1,    "Minimum overlapping detections needed to confirm a face. Higher values reduce false positives."),
+        ]),
+    ];
+
+    // ── State ─────────────────────────────────────────────────────────────────
+
+    ElementReference _videoRef;
+    ElementReference _canvasRef;
+
+    AlgorithmDef _selected       = _algorithms[0];
+    bool         _mirror         = true;
+    bool         _paused         = false;
+    bool         _showFps        = false;
+    bool         _ready          = false;
+    string?      _statusMsg      = "Initializing camera\u2026";
+    string?      _openInfo       = null;
+    bool         _eyedropperMode = false;
+    int          _colorR         = 255;
+    int          _colorG         = 0;
+    int          _colorB         = 0;
+
+    string ColorHex => $"#{_colorR:X2}{_colorG:X2}{_colorB:X2}";
+
+    // ── Lifecycle ─────────────────────────────────────────────────────────────
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender) return;
+        try
+        {
+            await JS.InvokeVoidAsync("cvEngine.init", _videoRef, _canvasRef);
+            await JS.InvokeVoidAsync("cvEngine.setMirror", _mirror);
+            _ready     = true;
+            _statusMsg = null;
+        }
+        catch (Exception ex)
+        {
+            _statusMsg = $"Error: {ex.Message}";
+        }
+        StateHasChanged();
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        try { await JS.InvokeVoidAsync("cvEngine.stop"); }
+        catch { /* component may be disposed before JS is ready */ }
+    }
+
+    // ── Event handlers ────────────────────────────────────────────────────────
+
+    async Task SelectAlgorithm(AlgorithmDef algo)
+    {
+        _selected       = algo;
+        _openInfo       = null;
+        _eyedropperMode = false;
+        if (_paused) { _paused = false; await JS.InvokeVoidAsync("cvEngine.setPause", false); }
+
+        var paramDict = algo.Params.ToDictionary(p => p.Id, p => p.Value);
+        if (algo.Id == "colorDetect")
+        {
+            paramDict["r"] = _colorR;
+            paramDict["g"] = _colorG;
+            paramDict["b"] = _colorB;
+        }
+        await JS.InvokeVoidAsync("cvEngine.setAlgorithm", algo.Id, paramDict);
+    }
+
+    void ToggleInfo(string id) => _openInfo = _openInfo == id ? null : id;
+
+    async Task ToggleEyedropper()
+    {
+        _eyedropperMode = !_eyedropperMode;
+        _paused         = _eyedropperMode;
+        if (_eyedropperMode)
+            await JS.InvokeVoidAsync("cvEngine.freezePassthrough");
+        else
+            await JS.InvokeVoidAsync("cvEngine.setPause", false);
+    }
+
+    async Task OnCanvasClick(MouseEventArgs e)
+    {
+        if (!_eyedropperMode) return;
+        var color = await JS.InvokeAsync<int[]?>("cvEngine.pickColorAt", e.ClientX, e.ClientY);
+        if (color is { Length: 3 })
+        {
+            _colorR = color[0];
+            _colorG = color[1];
+            _colorB = color[2];
+            await PushColor();
+        }
+        _eyedropperMode = false;
+        _paused         = false;
+        await JS.InvokeVoidAsync("cvEngine.setPause", false);
+    }
+
+    async Task OnColorInputChange(ChangeEventArgs e)
+    {
+        var hex = e.Value?.ToString()?.TrimStart('#');
+        if (hex?.Length == 6)
+        {
+            _colorR = Convert.ToInt32(hex[..2], 16);
+            _colorG = Convert.ToInt32(hex[2..4], 16);
+            _colorB = Convert.ToInt32(hex[4..6], 16);
+            await PushColor();
+        }
+    }
+
+    async Task PushColor()
+    {
+        await JS.InvokeVoidAsync("cvEngine.setParam", "r", (double)_colorR);
+        await JS.InvokeVoidAsync("cvEngine.setParam", "g", (double)_colorG);
+        await JS.InvokeVoidAsync("cvEngine.setParam", "b", (double)_colorB);
+    }
+
+    async Task OnParamChange(AlgoParam param, ChangeEventArgs e)
+    {
+        if (!double.TryParse(e.Value?.ToString(), System.Globalization.NumberStyles.Any,
+                System.Globalization.CultureInfo.InvariantCulture, out var val)) return;
+        param.Value = val;
+        await JS.InvokeVoidAsync("cvEngine.setParam", param.Id, val);
+    }
+
+    async Task OnMirrorChange()  => await JS.InvokeVoidAsync("cvEngine.setMirror",  _mirror);
+    async Task OnPauseChange()   => await JS.InvokeVoidAsync("cvEngine.setPause",   _paused);
+    async Task OnShowFpsChange() => await JS.InvokeVoidAsync("cvEngine.setShowFps", _showFps);
+}
