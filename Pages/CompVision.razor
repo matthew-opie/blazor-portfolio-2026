@@ -13,14 +13,104 @@
         <!-- Left: Tools -->
         <div class="cv-panel cv-tools">
             <div class="panel-label">Tools</div>
+            @{string? _lastCategory = null;}
             @foreach (var algo in _algorithms)
             {
                 var a = algo;
+                if (a.Category != _lastCategory)
+                {
+                    _lastCategory = a.Category;
+                    <div class="tool-category">@a.Category</div>
+                }
                 <button class="tool-btn @(_selected.Id == a.Id ? "active" : "")"
                         @onclick="() => SelectAlgorithm(a)">
                     @a.Name
                 </button>
             }
+            <button class="info-toggle-btn @(_infoOpen ? "active" : "")"
+                    title="@(_infoOpen ? "Hide algorithm details" : "How it works")"
+                    @onclick="() => _infoOpen = !_infoOpen">
+                <i class="fa-solid @(_infoOpen ? "fa-angles-left" : "fa-angles-right")"></i>
+                <span>@(_infoOpen ? "Hide" : "Details")</span>
+            </button>
+        </div>
+
+        <!-- Info: Algorithm details panel -->
+        <div class="cv-info @(_infoOpen ? "open" : "")">
+            <div class="cv-info-scroll">
+                <p class="algo-info-name">@_selected.Name</p>
+                <div class="algo-doc">
+                    @switch (_selected.Id)
+                    {
+                        case "passthrough":
+                            <p>Each video frame is captured by calling <code>drawImage(video, …)</code> into a hidden offscreen canvas, then <code>cv.imread(canvas)</code> converts the raw pixel buffer into an OpenCV <code>Mat</code> typed <code>CV_8UC4</code> (8-bit unsigned, 4 channels: RGBA). In passthrough, that Mat is copied to the output and written to the visible canvas via <code>cv.imshow</code> without any processing.</p>
+                            <p>The offscreen canvas is necessary because <code>cv.imread</code> does not accept a <code>HTMLVideoElement</code> directly; it needs a canvas whose pixel buffer can be read synchronously. Every algorithm in this app goes through this same pipeline. The processing loop runs inside <code>requestAnimationFrame</code> on the main thread, so any algorithm that takes more than roughly 16 ms will drop frames visibly.</p>
+                            break;
+
+                        case "grayscale":
+                            <p>Each pixel is converted to a single luminance value using the ITU-R BT.601 luma equation: <code>Y = 0.299·R + 0.587·G + 0.114·B</code>. The weights come from the spectral sensitivity of the human visual system. The eye has far more green-sensitive M-cones than red-sensitive L-cones, and comparatively few blue-sensitive S-cones, so green carries the most perceptual weight.</p>
+                            <p>OpenCV's <code>cvtColor(src, dst, COLOR_RGBA2GRAY)</code> applies those coefficients in a single pass. The output is a single-channel image, which then gets converted back to RGBA before display. HTML canvases always expect 4-channel pixel data, so the luminance value is broadcast to all three color channels with alpha fixed at 255.</p>
+                            break;
+
+                        case "invert":
+                            <p>Applies a bitwise NOT to each color channel: <code>dst = 255 - src</code> per pixel. Black maps to white, white maps to black, and every intensity in between inverts symmetrically around 127.</p>
+                            <p>The alpha channel has to be excluded. Applying <code>bitwise_not</code> to the full RGBA Mat would invert alpha from 255 to 0, making every pixel fully transparent and producing a black canvas. The fix is to strip alpha first (RGBA to BGR), run the inversion on the 3-channel image, then convert back (BGR to RGBA) with alpha restored to 255.</p>
+                            break;
+
+                        case "blur":
+                            <p>Convolves the image with a 2D Gaussian kernel. The kernel is defined by <code>G(x,y) = (1/2πσ²) · exp(-(x²+y²)/2σ²)</code>, a rotationally symmetric bell curve that weights nearby pixels heavily and distant pixels near-zero. As a low-pass filter, it attenuates high-frequency noise while preserving broad image structure.</p>
+                            <p>The 2D Gaussian is separable: <code>G(x,y) = G(x) · G(y)</code>, so OpenCV computes it as two sequential 1D convolutions rather than one 2D pass. This brings per-pixel cost from O(k²) down to O(2k) where k is the kernel size, which matters a lot for large kernels. The kernel size must be odd so there is a well-defined center pixel. When σ=0, OpenCV derives it from the kernel size automatically using <code>σ ≈ 0.3·((k-1)·0.5 - 1) + 0.8</code>.</p>
+                            break;
+
+                        case "canny":
+                            <p>Canny edge detection, developed by John Canny in 1986, remains a standard reference method. It is designed around three explicit optimality criteria: low error rate (real edges only, minimal noise response), good localization (detected position close to the true edge center), and single response per edge.</p>
+                            <p><strong>Sobel gradients.</strong> Two 3×3 kernels estimate the partial derivatives ∂I/∂x and ∂I/∂y at each pixel. Gradient magnitude <code>|G| = √(Gx²+Gy²)</code> gives edge strength; direction <code>θ = atan2(Gy, Gx)</code> gives orientation.</p>
+                            <p><strong>Non-maximum suppression.</strong> Each pixel's gradient magnitude is compared against its two neighbors along the gradient direction, quantized to one of four angles (0°, 45°, 90°, 135°). Pixels that are not local maxima along that direction are zeroed out. This thins wide gradient ridges down to single-pixel-wide edges.</p>
+                            <p><strong>Hysteresis thresholding.</strong> Two thresholds partition pixels into strong edges (above the high threshold), weak edges (between the two), and non-edges (below the low threshold). Weak pixels survive only if they are 8-connected to at least one strong pixel, which preserves edge continuity through lower-contrast regions. This is what separates Canny from a simple gradient threshold.</p>
+                            break;
+
+                        case "threshold":
+                            <p>The most basic form of binary segmentation. Each pixel intensity is compared to a fixed scalar T: pixels above T become 255 (white), everything else becomes 0 (black). The image is first converted to grayscale because thresholding is a scalar operation and works on a single intensity channel.</p>
+                            <p>Global thresholding is effective when the scene has a clearly bimodal intensity histogram with a clean separation between foreground and background. It falls apart under spatially uneven lighting, where the right threshold varies across the image. Adaptive thresholding handles that by computing a local threshold per region. Otsu's method is another practical alternative: it automatically selects T to maximize the between-class intensity variance, which is equivalent to finding the valley between the two peaks in the histogram.</p>
+                            break;
+
+                        case "colorDetect":
+                            <p>Detects pixels matching a target color in HSV space and draws a bounding box around the best matching region.</p>
+                            <p><strong>Why HSV.</strong> In RGB, chromatic and luminance information are tangled across all three channels. The same red object looks very different in bright light versus shadow. HSV separates hue (the chromatic angle), saturation (color purity), and value (brightness) into independent channels. Changes in illumination mostly shift V while H stays relatively stable, making HSV much more reliable for color-based thresholding than raw RGB.</p>
+                            <p><strong>Hue wrap-around.</strong> OpenCV compresses the standard 360° hue circle to [0, 179] to fit in an 8-bit integer. Red falls near both ends of this range, around H=0 and H=179. When the target hue plus or minus the tolerance crosses either boundary, the implementation runs two separate <code>inRange</code> calls and combines them with <code>bitwise_or</code>.</p>
+                            <p><strong>Morphological cleanup.</strong> The binary mask from <code>inRange</code> is dilated with a large elliptical kernel (3 iterations) to merge nearby pixel clusters into solid blobs, then lightly eroded once to remove isolated noise. Dilation first preserves fragmented detections on striped or partially occluded objects that a conventional open operation would destroy.</p>
+                            <p><strong>Region selection.</strong> <code>findContours</code> extracts the connected components. Instead of taking the largest region by pixel count, the implementation picks the contour with the highest fill density (contour area divided by bounding rectangle area). That selects the region where the target color is most uniformly packed, rather than a large sparse blob where matching pixels happen to span a wide area.</p>
+                            break;
+
+                        case "objectDetect":
+                            <p>Tracks a user-captured region using normalized cross-correlation template matching. At each frame, the stored template is slid across the source image to find the location that matches it most closely.</p>
+                            <p><strong>Normalized cross-correlation.</strong> At each candidate position (x, y), <code>cv.matchTemplate</code> with <code>TM_CCOEFF_NORMED</code> computes:</p>
+                            <p><code>R(x,y) = ΣΣ(T'·S') / √(ΣΣT'² · ΣΣS'²)</code></p>
+                            <p>where T' and S' are zero-mean versions of the template and source patch. This is the Pearson correlation coefficient applied to image patches, giving a score in [-1, 1] where 1.0 is a perfect match. Normalization makes the score invariant to global brightness changes between the template and the current frame.</p>
+                            <p><strong>Scale search.</strong> The template is resized to up to 5 discrete scale factors. A smaller template matches a larger (closer) object; a larger template matches a smaller (farther) one. The correct approach is to resize the image pyramid rather than the template, which avoids accumulating interpolation artifacts on the reference patch, but template resizing is simpler and works acceptably for modest depth changes.</p>
+                            <p><strong>Rotation search.</strong> At each scale, the template is rotated via an affine transform from <code>getRotationMatrix2D</code> and <code>warpAffine</code>. The output canvas expands to fit the rotated template without clipping: <code>nw = |W·cosθ| + |H·sinθ|</code>, <code>nh = |W·sinθ| + |H·cosθ|</code>. The translation in the rotation matrix is adjusted to keep the image centered. The best combination of scale and angle wins by highest correlation score.</p>
+                            <p>Each <code>matchTemplate</code> call runs in O(W·H·tw·th) time. At maximum settings the grid can be 65 combinations per frame, which is where performance degrades. Template matching also has no concept of object class; it is looking for the exact captured patch, so illumination changes or occlusion can cause it to lose the target.</p>
+                            break;
+
+                        case "cocoSsd":
+                            <p>Runs MobileNet SSD via TensorFlow.js, a neural network trained on the 80-class COCO dataset. The model runs entirely in the browser using WebGL for GPU acceleration. Inference fires asynchronously so the video feed continues at full frame rate while detections update as fast as the GPU allows, typically 5-15 fps on a mid-range desktop.</p>
+                            <p><strong>MobileNet backbone.</strong> MobileNet replaces the standard convolutions of a full CNN with depthwise separable convolutions. Each standard conv is split into a depthwise conv (one filter per input channel, zero cross-channel mixing) followed by a pointwise 1x1 conv (mixes channels). The depthwise step costs <code>Dk²M</code> operations and the pointwise step costs <code>DM²</code>, versus <code>Dk²M²</code> for a standard conv. For a 3x3 kernel and 512 channels this is roughly 8x fewer multiply-adds, which is what makes MobileNet fast enough to run on constrained hardware.</p>
+                            <p><strong>SSD detection head.</strong> Single Shot Detector attaches prediction heads at multiple feature map layers with different spatial resolutions. Coarser feature maps (large receptive fields) handle large objects; finer maps (small receptive fields) handle small ones. At each spatial location, the head predicts bounding box offsets relative to a set of default anchor boxes with fixed aspect ratios and scales, plus a class probability distribution over all 80 categories plus background. This is different from a two-stage detector (like Faster R-CNN) which first proposes regions and then classifies them; SSD does both in a single forward pass.</p>
+                            <p><strong>Box format.</strong> COCO-SSD returns detections in <code>[x, y, width, height]</code> format in pixel coordinates of the input frame, along with a class name string and a score. The confidence slider maps directly to the <code>minScore</code> parameter in <code>model.detect()</code>. Non-maximum suppression is handled internally by the model.</p>
+                            <p>Each frame is rendered from an OpenCV Mat into an offscreen canvas, which TF.js reads via WebGL textures. The inference call is <code>await model.detect(canvas)</code> and the returned array is buffered so the draw loop can overlay the results on every subsequent frame until the next inference completes.</p>
+                            break;
+
+                        case "faceDetect":
+                            <p>Uses the Viola-Jones Haar cascade classifier from the 2001 paper by Paul Viola and Michael Jones. It was the first practical real-time face detector and remains in use for its speed on CPU hardware.</p>
+                            <p><strong>Integral image.</strong> A summed-area table is precomputed over the grayscale frame. Any rectangular region sum can then be computed in O(1) time with four table lookups: <code>sum(rect) = I(x2,y2) - I(x1,y2) - I(x2,y1) + I(x1,y1)</code>. This is what makes the feature evaluations cheap enough to run in real time.</p>
+                            <p><strong>Haar-like features.</strong> Rectangular filters compute differences between adjacent region sums, which are fast approximations of edges, lines, and center-surround patterns. With the integral image, each feature evaluation costs O(1) regardless of the rectangle size. The full candidate set contains tens of thousands of features at various scales and positions within a sliding detection window.</p>
+                            <p><strong>AdaBoost training.</strong> The cascade was trained offline by running AdaBoost to select the most discriminative subset of Haar features. Each boosting round picks one weak classifier (a single thresholded feature), and the weighted combination of those forms a strong classifier for one stage. The full cascade has around 20 stages, with later stages testing more features and being proportionally slower.</p>
+                            <p><strong>Cascade rejection.</strong> Stages run in order from simplest to most complex. A window advances only if it passes the current stage; failing any stage discards it immediately. In practice roughly half of all non-face windows are rejected at stage one, which tests only the single best feature. Since most image regions are not faces, the average cost per window stays very low despite the total number of features.</p>
+                            <p><code>scaleFactor</code> controls how much the detection window grows between pyramid levels (1.1 means 10% per step; smaller values are more thorough but require more passes). <code>minNeighbors</code> requires a candidate to be confirmed by N overlapping detections from neighboring windows before being accepted, trading recall for fewer false positives. The cascade loaded here was trained on frontal face data, so profile faces and extreme head angles are generally not detected.</p>
+                            break;
+                    }
+                </div>
+            </div>
         </div>
 
         <!-- Center: Main Screen -->
@@ -33,6 +123,18 @@
             <canvas @ref="_canvasRef"
                     class="cv-canvas @(_ready ? "visible" : "") @(_eyedropperMode ? "eyedropper" : "")"
                     @onclick="OnCanvasClick"></canvas>
+            @if (_captureMode)
+            {
+                <div class="capture-overlay"
+                     @onmousedown="OnCaptureMouseDown"
+                     @onmousemove="OnCaptureMouseMove"
+                     @onmouseup="OnCaptureMouseUp">
+                    @if (_isDragging)
+                    {
+                        <div class="capture-selection" style="@CaptureSelectionStyle"></div>
+                    }
+                </div>
+            }
         </div>
 
         <!-- Right: Controls -->
@@ -97,6 +199,34 @@
                 </div>
             }
 
+            @if (_selected.Id == "objectDetect")
+            {
+                <div class="capture-section">
+                    <div class="capture-controls">
+                        <button class="capture-btn @(_captureMode ? "active" : "")"
+                                @onclick="ToggleCaptureMode">
+                            @(_captureMode ? "Cancel" : _hasTemplate ? "Re-Capture" : "Capture Object")
+                        </button>
+                        @if (_hasTemplate && !_captureMode)
+                        {
+                            <button class="capture-clear-btn" title="Clear template" @onclick="ClearTemplate">
+                                <i class="fa-solid fa-xmark"></i>
+                            </button>
+                        }
+                    </div>
+                    <div class="capture-hint">
+                        @if (_captureMode)
+                        {
+                            <span>Drag a box around the object to track.</span>
+                        }
+                        else if (!_hasTemplate)
+                        {
+                            <span>Capture a region to start tracking it in the feed.</span>
+                        }
+                    </div>
+                </div>
+            }
+
             <div class="cv-options">
                 <label class="option-check">
                     <input type="checkbox" @bind="_mirror" @bind:after="OnMirrorChange" />
@@ -130,35 +260,46 @@
         public string Description { get; } = description;
     }
 
-    record AlgorithmDef(string Id, string Name, List<AlgoParam> Params);
+    record AlgorithmDef(string Id, string Name, string Category, List<AlgoParam> Params);
 
     // ── Algorithm definitions ─────────────────────────────────────────────────
 
     static readonly List<AlgorithmDef> _algorithms =
     [
-        new("passthrough", "Passthrough",  []),
-        new("grayscale",   "Grayscale",    []),
-        new("invert",      "Invert",       []),
-        new("blur",        "Gaussian Blur",
+        new("passthrough", "Passthrough",  "Basic", []),
+        new("grayscale",   "Grayscale",    "Basic", []),
+        new("invert",      "Invert",       "Basic", []),
+        new("blur",        "Gaussian Blur","Basic",
         [
             new("kernelSize", "Kernel Size", 1,    31,  5,    2,    "Size of the blur kernel in pixels. Must be odd. Larger values produce a stronger, wider blur."),
             new("sigma",      "Sigma",       0,    10,  0,    0.1,  "Gaussian standard deviation. 0 = auto-derived from kernel size. Higher values spread the blur further."),
         ]),
-        new("canny",       "Canny Edge",
+        new("threshold",   "Threshold",    "Basic",
+        [
+            new("thresh", "Threshold", 0, 255, 127, 1, "Pixel intensity cutoff (0 to 255). Pixels brighter than this become white; darker pixels become black."),
+        ]),
+        new("canny",       "Canny Edge",   "Edge & Feature",
         [
             new("low",  "Low Threshold",  0, 300, 50,  1, "Edges with gradient strength below this are discarded entirely. Lower values keep more weak edges."),
             new("high", "High Threshold", 0, 300, 150, 1, "Edges above this are always kept. Edges between low and high are kept only if connected to a strong edge."),
         ]),
-        new("threshold",   "Threshold",
+        new("colorDetect", "Color Detection", "Tracking",
         [
-            new("thresh", "Threshold", 0, 255, 127, 1, "Pixel intensity cutoff (0 to 255). Pixels brighter than this become white; darker pixels become black."),
+            new("tolerance", "Hue Tolerance",   1,    60,   25,   1,    "How wide a hue angle to match around the target color. Higher values detect more color variants."),
+            new("satMin",    "Sat. Minimum",    0,    255,  30,   1,    "Minimum saturation required to match. Raise this to exclude grays and near-white pixels."),
+            new("minFill",   "Min. Fill",       0.05, 0.8,  0.25, 0.05, "Minimum fraction of the bounding box that must be filled with matching pixels. Raise to suppress weak detections."),
         ]),
-        new("colorDetect", "Color Detection",
+        new("objectDetect", "Object Detection", "Tracking",
         [
-            new("tolerance", "Hue Tolerance", 1,  60,  25, 1, "How wide a hue angle to match around the target color. Higher values detect more color variants."),
-            new("satMin",    "Sat. Minimum",  0,  255, 30, 1, "Minimum saturation required to match. Raise this to exclude grays and near-white pixels."),
+            new("angleTolerance", "Angle Search",     0,   90,  0,    5,    "Degrees either side to rotate the template while searching. Higher values find tilted objects but are slower."),
+            new("scaleRange",     "Size Flexibility", 0,   0.5, 0,    0.05, "How much the object can shrink or grow relative to the captured template. 0 = exact size only."),
+            new("threshold",      "Match Threshold",  0.1, 1.0, 0.3,  0.05, "Minimum confidence required to show a detection. Lower values detect looser matches; higher values are stricter."),
         ]),
-        new("faceDetect",  "Face Detection",
+        new("cocoSsd",     "COCO-SSD",       "AI / ML",
+        [
+            new("confThresh", "Confidence", 0.1, 0.9, 0.35, 0.05, "Minimum score to show a detection. Lower values catch more objects but also more false positives."),
+        ]),
+        new("faceDetect",  "Face Detection", "AI / ML",
         [
             new("minSize",      "Min Size",      20,   200, 80,  5,    "Smallest face (in pixels) to detect. Increase to skip small or distant faces and improve performance."),
             new("scaleFactor",  "Scale Factor",  1.05, 2.0, 1.1, 0.05, "How aggressively the image is downscaled between detection passes. Lower values are more thorough but slower."),
@@ -179,11 +320,23 @@
     string?      _statusMsg      = "Initializing camera\u2026";
     string?      _openInfo       = null;
     bool         _eyedropperMode = false;
+    bool         _infoOpen      = false;
+    bool         _captureMode   = false;
+    bool         _isDragging    = false;
+    bool         _hasTemplate   = false;
+    double       _dragOffX1, _dragOffY1, _dragOffX2, _dragOffY2; // overlay-relative (for visual rect)
+    double       _dragClientX1, _dragClientY1;                    // client coords (for JS crop)
     int          _colorR         = 255;
     int          _colorG         = 0;
     int          _colorB         = 0;
 
     string ColorHex => $"#{_colorR:X2}{_colorG:X2}{_colorB:X2}";
+
+    string CaptureSelectionStyle =>
+        $"left:{Math.Min(_dragOffX1,_dragOffX2):0}px;" +
+        $"top:{Math.Min(_dragOffY1,_dragOffY2):0}px;" +
+        $"width:{Math.Abs(_dragOffX2-_dragOffX1):0}px;" +
+        $"height:{Math.Abs(_dragOffY2-_dragOffY1):0}px;";
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
@@ -217,6 +370,8 @@
         _selected       = algo;
         _openInfo       = null;
         _eyedropperMode = false;
+        _captureMode    = false;
+        _isDragging     = false;
         if (_paused) { _paused = false; await JS.InvokeVoidAsync("cvEngine.setPause", false); }
 
         var paramDict = algo.Params.ToDictionary(p => p.Id, p => p.Value);
@@ -287,4 +442,55 @@
     async Task OnMirrorChange()  => await JS.InvokeVoidAsync("cvEngine.setMirror",  _mirror);
     async Task OnPauseChange()   => await JS.InvokeVoidAsync("cvEngine.setPause",   _paused);
     async Task OnShowFpsChange() => await JS.InvokeVoidAsync("cvEngine.setShowFps", _showFps);
+
+    async Task ToggleCaptureMode()
+    {
+        _captureMode = !_captureMode;
+        _isDragging  = false;
+        if (_captureMode)
+            await JS.InvokeVoidAsync("cvEngine.freezePassthrough");
+        else
+        {
+            _paused = false;
+            await JS.InvokeVoidAsync("cvEngine.setPause", false);
+        }
+    }
+
+    async Task ClearTemplate()
+    {
+        _hasTemplate = false;
+        await JS.InvokeVoidAsync("cvEngine.clearObjectTemplate");
+    }
+
+    void OnCaptureMouseDown(MouseEventArgs e)
+    {
+        _isDragging   = true;
+        _dragOffX1    = _dragOffX2    = e.OffsetX;
+        _dragOffY1    = _dragOffY2    = e.OffsetY;
+        _dragClientX1 = e.ClientX;
+        _dragClientY1 = e.ClientY;
+    }
+
+    void OnCaptureMouseMove(MouseEventArgs e)
+    {
+        if (!_isDragging) return;
+        _dragOffX2 = e.OffsetX;
+        _dragOffY2 = e.OffsetY;
+    }
+
+    async Task OnCaptureMouseUp(MouseEventArgs e)
+    {
+        if (!_isDragging) return;
+        _isDragging = false;
+
+        var ok = await JS.InvokeAsync<bool>("cvEngine.setObjectTemplate",
+            _dragClientX1, _dragClientY1, e.ClientX, e.ClientY);
+        if (ok)
+        {
+            _hasTemplate = true;
+            _captureMode = false;
+            _paused      = false;
+            await JS.InvokeVoidAsync("cvEngine.setPause", false);
+        }
+    }
 }

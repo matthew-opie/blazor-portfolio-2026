@@ -40,6 +40,46 @@
 <div class="project-container card">
     <div class="project-title">
         <div>
+            <a class="project-link" href="/cv">
+                <h4>CV Playground</h4>
+            </a>
+        </div>
+    </div>
+
+    <div class="project-description">
+        <p>A real-time computer vision playground running on a live webcam feed in the browser, built to actually work rather than just demo well.</p>
+        <p>
+            A few problems came up that were worth solving properly. Color detection initially drew a bounding box on every frame
+            regardless of match quality, so instead of taking the largest region by pixel count, the implementation picks the contour
+            with the highest fill density (contour area divided by bounding rect area). That selects the region where the target color
+            is most uniformly packed, and a slider lets you set the minimum density floor so weak matches don't draw at all.
+            Bounding boxes across all detection modes were jittery frame-to-frame, so exponential moving average smoothing
+            was added to the box coordinates — O(1) per frame and it naturally weights recent detections higher than a fixed window would.
+            Template matching was extended to search across multiple scales and rotation angles up to 90 degrees, expanding the
+            rotated template canvas to avoid edge clipping, with the result drawn as a rotated polygon rather than an axis-aligned box.
+            The original plan was YOLOv8 via ONNX Runtime, but the model shipped as opset 21 which no browser runtime supports,
+            so it was swapped for COCO-SSD via TensorFlow.js, which runs on a WebGL backend and fires asynchronously so inference
+            never blocks the video feed.
+        </p>
+    </div>
+    <div class="project-tags">
+        <div class="tags-label">
+            <p>Technologies used:</p>
+            <ul class="tag-group">
+                <li class="tag">OpenCV.js</li>
+                <li class="tag">TensorFlow.js</li>
+                <li class="tag">COCO-SSD</li>
+                <li class="tag">.NET Blazor</li>
+                <li class="tag">JS Interop</li>
+                <li class="tag">WebAssembly</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="project-container card">
+    <div class="project-title">
+        <div>
             <a class="project-link" href="/pomodoro">
                 <h4>Tomato Timer</h4>
             </a>

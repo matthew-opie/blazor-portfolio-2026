@@ -55,6 +55,22 @@
 .cv-tools {
     width: 148px;
     flex-shrink: 0;
+    display: flex;
+    flex-direction: column;
+}
+
+.tool-category {
+    font-size: 0.6rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding: 0.6rem 0.65rem 0.2rem;
+    margin-top: 0.1rem;
+}
+
+.tool-category:first-of-type {
+    padding-top: 0.1rem;
 }
 
 .tool-btn {
@@ -309,6 +325,176 @@ input[type="color"] {
     width: 14px;
     height: 14px;
     cursor: pointer;
+}
+
+/* ── Info toggle button (inside tools panel) ─────────────────────────────── */
+
+.info-toggle-btn {
+    margin-top: auto;
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid transparent;
+    border-radius: var(--radius-sm);
+    background: transparent;
+    color: var(--text-dim);
+    font-size: 0.78rem;
+    font-family: inherit;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.info-toggle-btn:hover,
+.info-toggle-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+/* ── Algorithm info panel ────────────────────────────────────────────────── */
+
+.cv-info {
+    width: 0;
+    min-width: 0;
+    overflow: hidden;
+    flex-shrink: 0;
+    transition: width 0.28s ease;
+}
+
+.cv-info.open {
+    width: clamp(260px, 28vw, 420px);
+}
+
+.cv-info-scroll {
+    width: clamp(260px, 28vw, 420px);
+    height: 100%;
+    overflow-y: auto;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1rem 1.1rem;
+    box-sizing: border-box;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.algo-info-name {
+    font-size: 0.7rem;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--text-dim);
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+    margin: 0;
+}
+
+.algo-doc p {
+    font-size: 0.82rem;
+    line-height: 1.65;
+    color: var(--text-muted);
+    margin: 0 0 0.75rem 0;
+}
+
+.algo-doc p:last-child {
+    margin-bottom: 0;
+}
+
+.algo-doc code {
+    font-size: 0.78rem;
+    font-family: 'Consolas', 'Fira Code', monospace;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05em 0.35em;
+    color: var(--accent);
+}
+
+.algo-doc strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+/* ── Object capture ──────────────────────────────────────────────────────── */
+
+.capture-section {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    border-top: 1px solid var(--border);
+    padding-top: 0.65rem;
+}
+
+.capture-controls {
+    display: flex;
+    gap: 0.4rem;
+    align-items: center;
+}
+
+.capture-btn {
+    flex: 1;
+    padding: 0.4rem 0.65rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 0.82rem;
+    font-family: inherit;
+    text-align: center;
+    transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.capture-btn:hover,
+.capture-btn.active {
+    border-color: var(--accent);
+    color: var(--accent);
+    background: var(--accent-dim);
+}
+
+.capture-clear-btn {
+    width: 28px;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface2);
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.75rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    transition: border-color 0.15s, color 0.15s;
+}
+
+.capture-clear-btn:hover {
+    border-color: #ef4444;
+    color: #ef4444;
+}
+
+.capture-hint {
+    font-size: 0.72rem;
+    color: var(--text-dim);
+    line-height: 1.4;
+}
+
+.capture-overlay {
+    position: absolute;
+    inset: 0;
+    cursor: crosshair;
+    z-index: 10;
+}
+
+.capture-selection {
+    position: absolute;
+    border: 2px dashed #39ff14;
+    background: rgba(57, 255, 20, 0.08);
+    pointer-events: none;
+    box-sizing: border-box;
 }
 
 /* ── Responsive ──────────────────────────────────────────────────────────── */

@@ -12,6 +12,8 @@ window.cvEngine = (() => {
     let _paused    = false;
     let _showFps   = false;
 
+    let _objTemplate = null;   // RGBA Mat captured by the user for object detection
+
     let _fps        = 0;
     let _frameCount = 0;
     let _lastFpsTime = 0;
@@ -49,11 +51,19 @@ window.cvEngine = (() => {
         },
 
         invert: (src, dst) => {
-            cv.bitwise_not(src, dst);
+            const bgr = new cv.Mat();
+            try {
+                cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
+                cv.bitwise_not(bgr, bgr);
+                cv.cvtColor(bgr, dst, cv.COLOR_BGR2RGBA);
+            } finally {
+                bgr.delete();
+            }
         },
 
         colorDetect: (() => {
             let _cachedH = 0, _lastR = -1, _lastG = -1, _lastB = -1;
+            let _ex = 0, _ey = 0, _ew = 0, _eh = 0, _emaReady = false; // EMA state
 
             // Compute OpenCV hue (0-179) from RGB without allocating any Mats
             function rgbToOcvHue(r, g, b) {
@@ -138,16 +148,38 @@ window.cvEngine = (() => {
                         const hierarchy = new cv.Mat();
                         try {
                             cv.findContours(cleaned, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+                            let bestScore = p.minFill ?? 0.25, bestRect = null; // minimum fill density to draw
                             for (let i = 0; i < contours.size(); i++) {
                                 const cnt = contours.get(i);
-                                if (cv.contourArea(cnt) > minArea) {
-                                    const r = cv.boundingRect(cnt);
-                                    cv.rectangle(dst,
-                                        new cv.Point(r.x, r.y),
-                                        new cv.Point(r.x + r.width, r.y + r.height),
-                                        new cv.Scalar(57, 255, 20, 255), 3);
+                                const area = cv.contourArea(cnt);
+                                if (area > minArea) {
+                                    const r    = cv.boundingRect(cnt);
+                                    const density = area / (r.width * r.height); // 0..1, higher = tighter match
+                                    if (density > bestScore) {
+                                        bestScore = density;
+                                        bestRect  = r;
+                                    }
                                 }
                                 cnt.delete();
+                            }
+                            if (bestRect) {
+                                const a = 0.25;
+                                if (!_emaReady) {
+                                    _ex = bestRect.x; _ey = bestRect.y;
+                                    _ew = bestRect.width; _eh = bestRect.height;
+                                    _emaReady = true;
+                                } else {
+                                    _ex = a * bestRect.x + (1 - a) * _ex;
+                                    _ey = a * bestRect.y + (1 - a) * _ey;
+                                    _ew = a * bestRect.width  + (1 - a) * _ew;
+                                    _eh = a * bestRect.height + (1 - a) * _eh;
+                                }
+                                cv.rectangle(dst,
+                                    new cv.Point(Math.round(_ex), Math.round(_ey)),
+                                    new cv.Point(Math.round(_ex + _ew), Math.round(_ey + _eh)),
+                                    new cv.Scalar(57, 255, 20, 255), 3);
+                            } else {
+                                _emaReady = false; // reset when object disappears
                             }
                         } finally {
                             contours.delete();
@@ -164,9 +196,179 @@ window.cvEngine = (() => {
             };
         })(),
 
+        objectDetect: (src, dst, p) => {
+            src.copyTo(dst);
+            if (!_objTemplate || _objTemplate.empty()) return;
+
+            const angleTol   = Math.round(p.angleTolerance ?? 0);
+            const scaleRange = p.scaleRange ?? 0;
+            const threshold  = p.threshold ?? 0.3;
+
+            const gray    = new cv.Mat();
+            const tplGray = new cv.Mat();
+            try {
+                cv.cvtColor(src,          gray,    cv.COLOR_RGBA2GRAY);
+                cv.cvtColor(_objTemplate, tplGray, cv.COLOR_RGBA2GRAY);
+
+                // Angles: 0 plus steps of 15° up to ±angleTol (capped at ~13 entries)
+                const angles = [0];
+                if (angleTol > 0) {
+                    const step = angleTol <= 30 ? 5 : 15;
+                    for (let a = step; a <= angleTol; a += step) angles.push(a, -a);
+                }
+
+                // Up to 5 scales: 1, 1±half, 1±full
+                const scales = [1.0];
+                if (scaleRange > 0) {
+                    const h = scaleRange / 2;
+                    scales.push(1 + h, Math.max(0.2, 1 - h),
+                                1 + scaleRange, Math.max(0.2, 1 - scaleRange));
+                }
+
+                let bestVal = threshold, bestLoc = null, bestW = tplGray.cols, bestH = tplGray.rows, bestAngle = 0, bestScale = 1;
+
+                for (const scale of scales) {
+                    const tw = Math.round(tplGray.cols * scale);
+                    const th = Math.round(tplGray.rows * scale);
+                    if (tw < 8 || th < 8 || tw >= gray.cols || th >= gray.rows) continue;
+
+                    const scaledTpl = new cv.Mat();
+                    cv.resize(tplGray, scaledTpl, new cv.Size(tw, th));
+                    try {
+                        for (const angle of angles) {
+                            const rotTpl = angle !== 0 ? rotateMat(scaledTpl, angle) : scaledTpl;
+                            try {
+                                if (rotTpl.cols >= gray.cols || rotTpl.rows >= gray.rows) continue;
+                                const result = new cv.Mat();
+                                cv.matchTemplate(gray, rotTpl, result, cv.TM_CCOEFF_NORMED);
+                                const mmr = cv.minMaxLoc(result);
+                                result.delete();
+                                if (mmr.maxVal > bestVal) {
+                                    bestVal   = mmr.maxVal;
+                                    bestLoc   = mmr.maxLoc;
+                                    bestW     = rotTpl.cols;
+                                    bestH     = rotTpl.rows;
+                                    bestAngle = angle;
+                                    bestScale = scale;
+                                }
+                            } finally {
+                                if (angle !== 0) rotTpl.delete();
+                            }
+                        }
+                    } finally {
+                        scaledTpl.delete();
+                    }
+                }
+
+                if (bestLoc) {
+                    // Centre of the matched bounding box
+                    const cx = bestLoc.x + bestW / 2;
+                    const cy = bestLoc.y + bestH / 2;
+                    // Half-extents of the ORIGINAL (unrotated) template at this scale
+                    const hw = (tplGray.cols * bestScale) / 2;
+                    const hh = (tplGray.rows * bestScale) / 2;
+                    const rad = bestAngle * Math.PI / 180;
+                    const cosA = Math.cos(rad), sinA = Math.sin(rad);
+                    // Rotate each corner of the original template rect around the centre
+                    const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([lx, ly]) => [
+                        Math.round(cx + lx * cosA - ly * sinA),
+                        Math.round(cy + lx * sinA + ly * cosA),
+                    ]);
+                    const pts = cv.matFromArray(4, 1, cv.CV_32SC2, corners.flat());
+                    const ptVec = new cv.MatVector();
+                    ptVec.push_back(pts);
+                    cv.polylines(dst, ptVec, true, new cv.Scalar(57, 255, 20, 255), 3);
+                    ptVec.delete();
+                    pts.delete();
+                    cv.putText(dst, `${Math.round(bestVal * 100)}%`,
+                        new cv.Point(corners[0][0], corners[0][1] - 6),
+                        cv.FONT_HERSHEY_SIMPLEX, 0.65, new cv.Scalar(57, 255, 20, 255), 2);
+                }
+            } finally {
+                gray.delete();
+                tplGray.delete();
+            }
+        },
+
+        cocoSsd: (() => {
+            let _model       = null;
+            let _loading     = false;
+            let _inferring   = false;
+            let _lastDets    = [];
+            let _loadError   = null;
+            let _inferCanvas = null; // reused across inference calls
+
+            async function tryInit() {
+                if (_model || _loading || typeof cocoSsd === 'undefined') return;
+                _loading   = true;
+                _loadError = null;
+                try {
+                    _model = await cocoSsd.load();
+                } catch(e) {
+                    console.error('[coco-ssd]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            function drawStatus(dst, msg) {
+                cv.putText(dst, msg, new cv.Point(12, 36),
+                    cv.FONT_HERSHEY_SIMPLEX, 0.8, new cv.Scalar(57, 255, 20, 255), 2);
+            }
+
+            return (src, dst, p) => {
+                src.copyTo(dst);
+
+                if (_loadError) { drawStatus(dst, `COCO-SSD: ${_loadError.slice(0, 50)}`); return; }
+                if (!_model) {
+                    tryInit();
+                    drawStatus(dst, _loading ? 'Loading COCO-SSD model...' : 'Initializing...');
+                    return;
+                }
+
+                // Show status until the first inference result arrives
+                if (_inferring && _lastDets.length === 0) drawStatus(dst, 'Running inference...');
+
+                // Draw whatever detections last completed
+                for (const det of _lastDets) {
+                    const [bx, by, bw, bh] = det.bbox.map(Math.round);
+                    cv.rectangle(dst,
+                        new cv.Point(bx, by),
+                        new cv.Point(bx + bw, by + bh),
+                        new cv.Scalar(57, 255, 20, 255), 2);
+                    cv.putText(dst,
+                        `${det.class} ${Math.round(det.score * 100)}%`,
+                        new cv.Point(bx, Math.max(by - 6, 14)),
+                        cv.FONT_HERSHEY_SIMPLEX, 0.55, new cv.Scalar(57, 255, 20, 255), 2);
+                }
+
+                // Fire the next inference pass if the previous one finished
+                if (!_inferring) {
+                    _inferring = true;
+
+                    // Render the current (possibly mirrored) frame to a canvas for TF.js
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+
+                    _model.detect(_inferCanvas, 20, p.confThresh ?? 0.35)
+                        .then(dets => { _lastDets = dets; })
+                        .catch(e => console.warn('[coco-ssd]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
         faceDetect: (() => {
             let _classifier = null;
             let _loading    = false;
+            // EMA state per face slot (track up to 4 faces)
+            let _emaFaces = [];
 
             function tryInit() {
                 if (_classifier || _loading) return;
@@ -203,12 +405,30 @@ window.cvEngine = (() => {
                         new cv.Size(0, 0)
                     );
 
+                    // Pick only the largest detected face
+                    let best = null;
                     for (let i = 0; i < faces.size(); i++) {
                         const f = faces.get(i);
+                        if (!best || f.width * f.height > best.width * best.height) best = f;
+                    }
+
+                    if (best) {
+                        const a = 0.25;
+                        if (!_emaFaces[0]) {
+                            _emaFaces[0] = { x: best.x, y: best.y, w: best.width, h: best.height };
+                        } else {
+                            _emaFaces[0].x = a * best.x + (1 - a) * _emaFaces[0].x;
+                            _emaFaces[0].y = a * best.y + (1 - a) * _emaFaces[0].y;
+                            _emaFaces[0].w = a * best.width  + (1 - a) * _emaFaces[0].w;
+                            _emaFaces[0].h = a * best.height + (1 - a) * _emaFaces[0].h;
+                        }
+                        const e = _emaFaces[0];
                         cv.rectangle(dst,
-                            new cv.Point(f.x, f.y),
-                            new cv.Point(f.x + f.width, f.y + f.height),
+                            new cv.Point(Math.round(e.x), Math.round(e.y)),
+                            new cv.Point(Math.round(e.x + e.w), Math.round(e.y + e.h)),
                             new cv.Scalar(57, 255, 20, 255), 2);
+                    } else {
+                        _emaFaces[0] = null; // reset when face disappears
                     }
                 } finally {
                     gray.delete();
@@ -217,6 +437,20 @@ window.cvEngine = (() => {
             };
         })(),
     };
+
+    function rotateMat(mat, deg) {
+        const rad = deg * Math.PI / 180;
+        const c   = Math.abs(Math.cos(rad)), s = Math.abs(Math.sin(rad));
+        const nw  = Math.round(mat.cols * c + mat.rows * s);
+        const nh  = Math.round(mat.cols * s + mat.rows * c);
+        const M   = cv.getRotationMatrix2D(new cv.Point(mat.cols / 2, mat.rows / 2), deg, 1);
+        M.data64F[2] += (nw - mat.cols) / 2;
+        M.data64F[5] += (nh - mat.rows) / 2;
+        const out = new cv.Mat();
+        cv.warpAffine(mat, out, M, new cv.Size(nw, nh));
+        M.delete();
+        return out;
+    }
 
     function loop() {
         if (!_running) return;
@@ -296,7 +530,7 @@ window.cvEngine = (() => {
             _tempCanvas        = document.createElement('canvas');
             _tempCanvas.width  = _video.videoWidth;
             _tempCanvas.height = _video.videoHeight;
-            _tempCtx           = _tempCanvas.getContext('2d');
+            _tempCtx           = _tempCanvas.getContext('2d', { willReadFrequently: true });
 
             _running     = true;
             _lastFpsTime = performance.now();
@@ -355,6 +589,45 @@ window.cvEngine = (() => {
 
             const px = _tempCtx.getImageData(bx, by, 1, 1).data;
             return [px[0], px[1], px[2]];
+        },
+
+        setObjectTemplate(x1, y1, x2, y2) {
+            if (!_tempCanvas || !_tempCtx || !_canvas) return false;
+
+            const rect  = _canvas.getBoundingClientRect();
+            const scale = Math.min(rect.width / _canvas.width, rect.height / _canvas.height);
+            const offX  = (rect.width  - _canvas.width  * scale) / 2;
+            const offY  = (rect.height - _canvas.height * scale) / 2;
+
+            const mapX = cx => Math.round((cx - rect.left - offX) / scale);
+            const mapY = cy => Math.round((cy - rect.top  - offY) / scale);
+
+            const dx1 = mapX(x1), dy1 = mapY(y1), dx2 = mapX(x2), dy2 = mapY(y2);
+            const lx  = Math.max(0, Math.min(dx1, dx2));
+            const ly  = Math.max(0, Math.min(dy1, dy2));
+            const lw  = Math.min(_tempCanvas.width  - lx, Math.abs(dx2 - dx1));
+            const lh  = Math.min(_tempCanvas.height - ly, Math.abs(dy2 - dy1));
+            if (lw < 8 || lh < 8) return false;
+
+            // Build a display-space canvas (with mirror applied if needed),
+            // so the cropped template matches the orientation the algorithm sees.
+            const disp = document.createElement('canvas');
+            disp.width = _tempCanvas.width; disp.height = _tempCanvas.height;
+            const dctx = disp.getContext('2d');
+            if (_mirror) { dctx.translate(_tempCanvas.width, 0); dctx.scale(-1, 1); }
+            dctx.drawImage(_tempCanvas, 0, 0);
+
+            const crop = document.createElement('canvas');
+            crop.width = lw; crop.height = lh;
+            crop.getContext('2d').drawImage(disp, lx, ly, lw, lh, 0, 0, lw, lh);
+
+            if (_objTemplate) _objTemplate.delete();
+            _objTemplate = cv.imread(crop);
+            return true;
+        },
+
+        clearObjectTemplate() {
+            if (_objTemplate) { _objTemplate.delete(); _objTemplate = null; }
         },
     };
 })();
