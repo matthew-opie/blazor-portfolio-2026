@@ -53,10 +53,39 @@
 /* ── Tools panel ─────────────────────────────────────────────────────────── */
 
 .cv-tools {
-    width: 148px;
+    width: 195px;
     flex-shrink: 0;
     display: flex;
     flex-direction: column;
+    overflow: hidden;
+}
+
+.cv-tools-scroll {
+    flex: 1;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.18) transparent;
+}
+
+.cv-tools-scroll::-webkit-scrollbar {
+    width: 3px;
+}
+
+.cv-tools-scroll::-webkit-scrollbar-track {
+    background: transparent;
+    margin-block: var(--radius);
+}
+
+.cv-tools-scroll::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.18);
+    border-radius: 0;
+}
+
+.cv-tools-scroll::-webkit-scrollbar-thumb:hover {
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .tool-category {
@@ -73,30 +102,106 @@
     padding-top: 0.1rem;
 }
 
-.tool-btn {
-    width: 100%;
-    text-align: left;
-    background: transparent;
+.tool-item {
+    display: flex;
+    flex-direction: column;
+    width: fit-content;
+    align-self: flex-start;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
+    cursor: pointer;
+    transition: background 0.15s, border-color 0.15s;
+}
+
+.tool-item:hover {
+    background: var(--surface2);
+}
+
+.tool-item:hover .tool-btn {
+    color: var(--text);
+}
+
+.tool-item.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+}
+
+.tool-item.active .tool-btn {
+    color: var(--accent);
+}
+
+.tool-btn {
+    background: transparent;
+    border: none;
     padding: 0.45rem 0.65rem;
     color: var(--text-muted);
     font-size: 0.82rem;
     font-family: inherit;
     cursor: pointer;
-    transition: background 0.15s, color 0.15s, border-color 0.15s;
+    text-align: left;
 }
 
-.tool-btn:hover {
-    background: var(--surface2);
-    color: var(--text);
+/* ── Tag chips ───────────────────────────────────────────────────────────── */
+
+.tool-tags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem;
+    padding: 0 0.65rem 0.35rem;
+    margin-top: -0.15rem;
 }
 
-.tool-btn.active {
-    background: var(--accent-dim);
-    border-color: var(--accent);
-    color: var(--accent);
+.tag-chip {
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.08em 0.4em;
+    border-radius: 3px;
+    border: 1px solid;
+    cursor: pointer;
+    line-height: 1.4;
+    text-transform: lowercase;
+    user-select: none;
+    transition: background 0.15s, border-color 0.15s;
 }
+
+.tag-chip[data-tag="opencv"]     { color: #4096ff; border-color: rgba(64,150,255,0.4); background: rgba(64,150,255,0.08); }
+.tag-chip[data-tag="tensorflow"] { color: #ff8a3d; border-color: rgba(255,138,61,0.4); background: rgba(255,138,61,0.08); }
+.tag-chip[data-tag="mediapipe"]  { color: #a78bfa; border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); }
+
+.tag-chip[data-tag="opencv"].active     { background: rgba(64,150,255,0.2); border-color: #4096ff; }
+.tag-chip[data-tag="tensorflow"].active { background: rgba(255,138,61,0.2); border-color: #ff8a3d; }
+.tag-chip[data-tag="mediapipe"].active  { background: rgba(167,139,250,0.2); border-color: #a78bfa; }
+
+.tag-chip:hover { opacity: 0.85; }
+
+/* ── Tag filter bar ──────────────────────────────────────────────────────── */
+
+.tag-filter-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    font-size: 0.68rem;
+    color: var(--text-dim);
+    padding: 0.2rem 0.1rem 0.25rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 0.1rem;
+    flex-shrink: 0;
+}
+
+.tag-filter-clear {
+    background: transparent;
+    border: none;
+    color: var(--text-dim);
+    cursor: pointer;
+    font-size: 0.7rem;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    transition: color 0.15s;
+}
+
+.tag-filter-clear:hover { color: var(--text); }
 
 /* ── Main screen ─────────────────────────────────────────────────────────── */
 

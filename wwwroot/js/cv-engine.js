@@ -18,7 +18,15 @@ window.cvEngine = (() => {
     let _frameCount = 0;
     let _lastFpsTime = 0;
 
+    function drawStatus(dst, msg) {
+        cv.putText(dst, msg, new cv.Point(12, 36),
+            cv.FONT_HERSHEY_SIMPLEX, 0.8, new cv.Scalar(57, 255, 20, 255), 2);
+    }
+
     const algorithms = {
+
+        // ── Basic ─────────────────────────────────────────────────────────────
+
         passthrough: (src, dst) => {
             src.copyTo(dst);
         },
@@ -26,28 +34,6 @@ window.cvEngine = (() => {
         grayscale: (src, dst) => {
             cv.cvtColor(src, dst, cv.COLOR_RGBA2GRAY);
             cv.cvtColor(dst, dst, cv.COLOR_GRAY2RGBA);
-        },
-
-        blur: (src, dst, p) => {
-            let k = Math.max(1, Math.round(p.kernelSize ?? 5));
-            if (k % 2 === 0) k++;
-            cv.GaussianBlur(src, dst, new cv.Size(k, k), p.sigma ?? 0);
-        },
-
-        canny: (src, dst, p) => {
-            const gray = new cv.Mat();
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-            cv.Canny(gray, gray, p.low ?? 50, p.high ?? 150);
-            cv.cvtColor(gray, dst, cv.COLOR_GRAY2RGBA);
-            gray.delete();
-        },
-
-        threshold: (src, dst, p) => {
-            const gray = new cv.Mat();
-            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
-            cv.threshold(gray, gray, p.thresh ?? 127, 255, cv.THRESH_BINARY);
-            cv.cvtColor(gray, dst, cv.COLOR_GRAY2RGBA);
-            gray.delete();
         },
 
         invert: (src, dst) => {
@@ -61,9 +47,122 @@ window.cvEngine = (() => {
             }
         },
 
+        blur: (src, dst, p) => {
+            let k = Math.max(1, Math.round(p.kernelSize ?? 5));
+            if (k % 2 === 0) k++;
+            cv.GaussianBlur(src, dst, new cv.Size(k, k), p.sigma ?? 0);
+        },
+
+        threshold: (src, dst, p) => {
+            const gray = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.threshold(gray, gray, p.thresh ?? 127, 255, cv.THRESH_BINARY);
+            cv.cvtColor(gray, dst, cv.COLOR_GRAY2RGBA);
+            gray.delete();
+        },
+
+        // ── Edge & Feature ────────────────────────────────────────────────────
+
+        canny: (src, dst, p) => {
+            const gray = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.Canny(gray, gray, p.low ?? 50, p.high ?? 150);
+            cv.cvtColor(gray, dst, cv.COLOR_GRAY2RGBA);
+            gray.delete();
+        },
+
+        houghLines: (src, dst, p) => {
+            const threshold = Math.round(p.threshold ?? 80);
+            const minLength = p.minLength ?? 50;
+            const maxGap    = p.maxGap    ?? 10;
+
+            const gray  = new cv.Mat();
+            const edges = new cv.Mat();
+            const lines = new cv.Mat();
+            try {
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.Canny(gray, edges, 50, 150);
+                cv.HoughLinesP(edges, lines, 1, Math.PI / 180, threshold, minLength, maxGap);
+
+                src.copyTo(dst);
+                for (let i = 0; i < lines.rows; i++) {
+                    const d = lines.data32S;
+                    cv.line(dst,
+                        new cv.Point(d[i * 4],     d[i * 4 + 1]),
+                        new cv.Point(d[i * 4 + 2], d[i * 4 + 3]),
+                        new cv.Scalar(57, 255, 20, 255), 2);
+                }
+            } finally {
+                gray.delete(); edges.delete(); lines.delete();
+            }
+        },
+
+        houghCircles: (src, dst, p) => {
+            const minDist   = p.minDist   ?? 50;
+            const param1    = p.param1    ?? 200;
+            const param2    = p.param2    ?? 30;
+            const minRadius = Math.round(p.minRadius ?? 0);
+            const maxRadius = Math.round(p.maxRadius ?? 0);
+
+            const gray    = new cv.Mat();
+            const circles = new cv.Mat();
+            try {
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.GaussianBlur(gray, gray, new cv.Size(9, 9), 2);
+                cv.HoughCircles(gray, circles, cv.HOUGH_GRADIENT,
+                    1, minDist, param1, param2, minRadius, maxRadius);
+
+                src.copyTo(dst);
+                for (let i = 0; i < circles.cols; i++) {
+                    const d  = circles.data32F;
+                    const cx = Math.round(d[i * 3]);
+                    const cy = Math.round(d[i * 3 + 1]);
+                    const r  = Math.round(d[i * 3 + 2]);
+                    cv.circle(dst, new cv.Point(cx, cy), r,
+                        new cv.Scalar(57, 255, 20, 255), 2);
+                    cv.circle(dst, new cv.Point(cx, cy), 3,
+                        new cv.Scalar(255, 100, 20, 255), -1);
+                }
+            } finally {
+                gray.delete(); circles.delete();
+            }
+        },
+
+        harrisCorner: (src, dst, p) => {
+            const blockSize = Math.max(2, Math.round(p.blockSize ?? 3));
+            let   ksize     = Math.max(3, Math.round(p.ksize    ?? 3));
+            if (ksize % 2 === 0) ksize++;
+            const k      = p.k         ?? 0.04;
+            const thresh = p.threshold ?? 150;
+
+            const gray    = new cv.Mat();
+            const corners = new cv.Mat();
+            const norm    = new cv.Mat();
+            try {
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.cornerHarris(gray, corners, blockSize, ksize, k);
+                cv.normalize(corners, norm, 0, 255, cv.NORM_MINMAX, cv.CV_32F);
+
+                src.copyTo(dst);
+                const data = norm.data32F;
+                for (let r = 0; r < norm.rows; r++) {
+                    for (let c = 0; c < norm.cols; c++) {
+                        if (data[r * norm.cols + c] > thresh) {
+                            cv.circle(dst, new cv.Point(c, r), 4,
+                                new cv.Scalar(57, 255, 20, 255), 2);
+                        }
+                    }
+                }
+            } finally {
+                gray.delete(); corners.delete(); norm.delete();
+            }
+        },
+
+        // ── Tracking ──────────────────────────────────────────────────────────
+
         colorDetect: (() => {
             let _cachedH = 0, _lastR = -1, _lastG = -1, _lastB = -1;
-            let _ex = 0, _ey = 0, _ew = 0, _eh = 0, _emaReady = false; // EMA state
+            let _ex = 0, _ey = 0, _ew = 0, _eh = 0, _emaReady = false;
 
             // Compute OpenCV hue (0-179) from RGB without allocating any Mats
             function rgbToOcvHue(r, g, b) {
@@ -291,13 +390,218 @@ window.cvEngine = (() => {
             }
         },
 
+        // ── AI / ML ───────────────────────────────────────────────────────────
+
+        handTrack: (() => {
+            let _detector      = null;
+            let _loading       = false;
+            let _loadError     = null;
+            let _inferring     = false;
+            let _lastHands     = [];
+            let _inferCanvas   = null;
+            let _modelLite     = null;  // null=unloaded, false=full, true=lite
+            let _modelMaxHands = null;
+
+            const EDGES = [
+                [0,1],[0,5],[0,17],[5,9],[9,13],[13,17],  // palm
+                [1,2],[2,3],[3,4],                         // thumb
+                [5,6],[6,7],[7,8],                         // index
+                [9,10],[10,11],[11,12],                    // middle
+                [13,14],[14,15],[15,16],                   // ring
+                [17,18],[18,19],[19,20],                   // pinky
+            ];
+
+            async function tryInit(useLite, maxHands) {
+                if (_loading) return;
+                if (_detector && _modelLite === useLite && _modelMaxHands === maxHands) return;
+                if (typeof handPoseDetection === 'undefined') return;
+
+                if (_detector) {
+                    try { _detector.dispose(); } catch {}
+                    _detector = null;
+                }
+                _loading   = true;
+                _loadError = null;
+                _lastHands = [];
+                try {
+                    _detector = await handPoseDetection.createDetector(
+                        handPoseDetection.SupportedModels.MediaPipeHands,
+                        { runtime: 'tfjs', modelType: useLite ? 'lite' : 'full', maxHands }
+                    );
+                    _modelLite     = useLite;
+                    _modelMaxHands = maxHands;
+                } catch(e) {
+                    console.error('[handtrack]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            return (src, dst, p) => {
+                src.copyTo(dst);
+                const confThresh = p.confThresh ?? 0.5;
+                const useLite    = Math.round(p.lite     ?? 0) === 1;
+                const maxHands   = Math.max(1, Math.min(4, Math.round(p.maxHands ?? 2)));
+
+                if (_loadError) { drawStatus(dst, `HandTrack: ${_loadError.slice(0, 50)}`); return; }
+
+                if (!_detector || _modelLite !== useLite || _modelMaxHands !== maxHands) {
+                    tryInit(useLite, maxHands);
+                    drawStatus(dst, _loading ? `Loading MediaPipe ${useLite ? 'Lite' : 'Full'}...` : 'Initializing...');
+                    return;
+                }
+
+                if (_inferring && _lastHands.length === 0) drawStatus(dst, 'Running inference...');
+
+                for (const hand of _lastHands) {
+                    const kps       = hand.keypoints;
+                    const isRight   = hand.handedness === 'Right';
+                    const lineColor = isRight
+                        ? new cv.Scalar(57, 255, 20, 255)
+                        : new cv.Scalar(0, 220, 255, 255);
+                    const dotColor  = isRight
+                        ? new cv.Scalar(255, 100, 20, 255)
+                        : new cv.Scalar(255, 255, 80, 255);
+
+                    for (const [a, b] of EDGES) {
+                        const ka = kps[a], kb = kps[b];
+                        if ((ka.score ?? 1) >= confThresh && (kb.score ?? 1) >= confThresh) {
+                            cv.line(dst,
+                                new cv.Point(Math.round(ka.x), Math.round(ka.y)),
+                                new cv.Point(Math.round(kb.x), Math.round(kb.y)),
+                                lineColor, 2);
+                        }
+                    }
+                    for (const kp of kps) {
+                        if ((kp.score ?? 1) >= confThresh) {
+                            cv.circle(dst,
+                                new cv.Point(Math.round(kp.x), Math.round(kp.y)),
+                                4, dotColor, -1);
+                        }
+                    }
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas        = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    _detector.estimateHands(_inferCanvas)
+                        .then(hands => { _lastHands = hands; })
+                        .catch(e => console.warn('[handtrack]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
+        poseEstimate: (() => {
+            let _detector     = null;
+            let _loading      = false;
+            let _loadError    = null;
+            let _inferring    = false;
+            let _lastPoses    = [];
+            let _inferCanvas  = null;
+            let _modelThunder = null; // false=lightning, true=thunder, null=unloaded
+
+            const EDGES = [
+                [0,1],[0,2],[1,3],[2,4],
+                [5,6],[5,7],[7,9],[6,8],[8,10],
+                [5,11],[6,12],[11,12],
+                [11,13],[13,15],[12,14],[14,16],
+            ];
+
+            async function tryInit(useThunder) {
+                if (_loading) return;
+                if (_detector && _modelThunder === useThunder) return;
+                if (typeof poseDetection === 'undefined') return;
+
+                if (_detector) {
+                    try { _detector.dispose(); } catch {}
+                    _detector = null;
+                }
+                _loading   = true;
+                _loadError = null;
+                _lastPoses = [];
+                try {
+                    const modelType = useThunder
+                        ? poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
+                        : poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
+                    _detector = await poseDetection.createDetector(
+                        poseDetection.SupportedModels.MoveNet, { modelType }
+                    );
+                    _modelThunder = useThunder;
+                } catch(e) {
+                    console.error('[movenet]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            return (src, dst, p) => {
+                src.copyTo(dst);
+                const confThresh = p.confThresh ?? 0.3;
+                const useThunder = Math.round(p.thunder ?? 0) === 1;
+
+                if (_loadError) { drawStatus(dst, `MoveNet: ${_loadError.slice(0, 50)}`); return; }
+
+                if (!_detector || _modelThunder !== useThunder) {
+                    tryInit(useThunder);
+                    drawStatus(dst, _loading ? `Loading MoveNet ${useThunder ? 'Thunder' : 'Lightning'}...` : 'Initializing...');
+                    return;
+                }
+
+                if (_inferring && _lastPoses.length === 0) drawStatus(dst, 'Running inference...');
+
+                for (const pose of _lastPoses) {
+                    const kps = pose.keypoints;
+                    for (const [a, b] of EDGES) {
+                        const ka = kps[a], kb = kps[b];
+                        if ((ka.score ?? 0) >= confThresh && (kb.score ?? 0) >= confThresh) {
+                            cv.line(dst,
+                                new cv.Point(Math.round(ka.x), Math.round(ka.y)),
+                                new cv.Point(Math.round(kb.x), Math.round(kb.y)),
+                                new cv.Scalar(57, 255, 20, 255), 2);
+                        }
+                    }
+                    for (const kp of kps) {
+                        if ((kp.score ?? 0) >= confThresh) {
+                            cv.circle(dst,
+                                new cv.Point(Math.round(kp.x), Math.round(kp.y)),
+                                5, new cv.Scalar(255, 100, 20, 255), -1);
+                        }
+                    }
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas        = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    _detector.estimatePoses(_inferCanvas)
+                        .then(poses => { _lastPoses = poses; })
+                        .catch(e => console.warn('[movenet]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
         cocoSsd: (() => {
             let _model       = null;
             let _loading     = false;
             let _inferring   = false;
             let _lastDets    = [];
             let _loadError   = null;
-            let _inferCanvas = null; // reused across inference calls
+            let _inferCanvas = null;
 
             async function tryInit() {
                 if (_model || _loading || typeof cocoSsd === 'undefined') return;
@@ -312,11 +616,6 @@ window.cvEngine = (() => {
                 _loading = false;
             }
 
-            function drawStatus(dst, msg) {
-                cv.putText(dst, msg, new cv.Point(12, 36),
-                    cv.FONT_HERSHEY_SIMPLEX, 0.8, new cv.Scalar(57, 255, 20, 255), 2);
-            }
-
             return (src, dst, p) => {
                 src.copyTo(dst);
 
@@ -327,10 +626,8 @@ window.cvEngine = (() => {
                     return;
                 }
 
-                // Show status until the first inference result arrives
                 if (_inferring && _lastDets.length === 0) drawStatus(dst, 'Running inference...');
 
-                // Draw whatever detections last completed
                 for (const det of _lastDets) {
                     const [bx, by, bw, bh] = det.bbox.map(Math.round);
                     cv.rectangle(dst,
@@ -343,20 +640,16 @@ window.cvEngine = (() => {
                         cv.FONT_HERSHEY_SIMPLEX, 0.55, new cv.Scalar(57, 255, 20, 255), 2);
                 }
 
-                // Fire the next inference pass if the previous one finished
                 if (!_inferring) {
                     _inferring = true;
-
-                    // Render the current (possibly mirrored) frame to a canvas for TF.js
                     if (!_inferCanvas ||
                         _inferCanvas.width  !== src.cols ||
                         _inferCanvas.height !== src.rows) {
-                        _inferCanvas = document.createElement('canvas');
+                        _inferCanvas        = document.createElement('canvas');
                         _inferCanvas.width  = src.cols;
                         _inferCanvas.height = src.rows;
                     }
                     cv.imshow(_inferCanvas, src);
-
                     _model.detect(_inferCanvas, 20, p.confThresh ?? 0.35)
                         .then(dets => { _lastDets = dets; })
                         .catch(e => console.warn('[coco-ssd]', e))
@@ -368,8 +661,7 @@ window.cvEngine = (() => {
         faceDetect: (() => {
             let _classifier = null;
             let _loading    = false;
-            // EMA state per face slot (track up to 4 faces)
-            let _emaFaces = [];
+            let _emaFaces   = [];
 
             function tryInit() {
                 if (_classifier || _loading) return;
@@ -406,7 +698,6 @@ window.cvEngine = (() => {
                         new cv.Size(0, 0)
                     );
 
-                    // Pick only the largest detected face
                     let best = null;
                     for (let i = 0; i < faces.size(); i++) {
                         const f = faces.get(i);
@@ -437,6 +728,738 @@ window.cvEngine = (() => {
                 }
             };
         })(),
+
+        faceLandmarks: (() => {
+            let _detector      = null;
+            let _loading       = false;
+            let _loadError     = null;
+            let _inferring     = false;
+            let _lastFaces     = [];
+            let _inferCanvas   = null;
+            let _modelRefine   = null;
+            let _modelMaxFaces = null;
+
+            // Closed-loop contours (last point connects back to first)
+            const CLOSED = {
+                faceOval:  [10,338,297,332,284,251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109],
+                leftEye:   [33,7,163,144,145,153,154,155,133,173,157,158,159,160,161,246],
+                rightEye:  [263,249,390,373,374,380,381,382,362,398,384,385,386,387,388,466],
+                lipsOuter: [61,185,40,39,37,0,267,269,270,409,291,375,321,405,314,17,84,181,91,146],
+                lipsInner: [78,191,80,81,82,13,312,311,310,415,308,324,318,402,317,14,87,178,88,95],
+            };
+
+            // Open polyline contours
+            const OPEN = {
+                leftEyebrow:  [46,53,52,65,55,70,63,105,66,107],
+                rightEyebrow: [276,283,282,295,285,300,293,334,296,336],
+                noseBridge:   [168,6,197,195,5,4],
+                noseTip:      [64,98,97,2,326,327,294],
+            };
+
+            const COLORS = {
+                faceOval:     [ 57, 255,  20],
+                leftEye:      [ 57, 255,  20],
+                rightEye:     [ 57, 255,  20],
+                lipsOuter:    [255,  80, 150],
+                lipsInner:    [255,  80, 150],
+                leftEyebrow:  [  0, 220, 255],
+                rightEyebrow: [  0, 220, 255],
+                noseBridge:   [255, 150,  20],
+                noseTip:      [255, 150,  20],
+            };
+
+            async function tryInit(refine, maxFaces) {
+                if (_loading) return;
+                if (_detector && _modelRefine === refine && _modelMaxFaces === maxFaces) return;
+                if (typeof faceLandmarksDetection === 'undefined') return;
+
+                if (_detector) {
+                    try { _detector.dispose(); } catch {}
+                    _detector = null;
+                }
+                _loading    = true;
+                _loadError  = null;
+                _lastFaces  = [];
+                try {
+                    _detector = await faceLandmarksDetection.createDetector(
+                        faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
+                        { runtime: 'tfjs', refineLandmarks: refine, maxFaces }
+                    );
+                    _modelRefine   = refine;
+                    _modelMaxFaces = maxFaces;
+                } catch(e) {
+                    console.error('[facemesh]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            function drawContour(dst, kps, indices, color, closed) {
+                const scalar = new cv.Scalar(color[0], color[1], color[2], 255);
+                for (let i = 0; i < indices.length - 1; i++) {
+                    const a = kps[indices[i]], b = kps[indices[i + 1]];
+                    if (!a || !b) continue;
+                    cv.line(dst,
+                        new cv.Point(Math.round(a.x), Math.round(a.y)),
+                        new cv.Point(Math.round(b.x), Math.round(b.y)),
+                        scalar, 1);
+                }
+                if (closed && indices.length > 1) {
+                    const first = kps[indices[0]], last = kps[indices[indices.length - 1]];
+                    if (first && last)
+                        cv.line(dst,
+                            new cv.Point(Math.round(last.x),  Math.round(last.y)),
+                            new cv.Point(Math.round(first.x), Math.round(first.y)),
+                            scalar, 1);
+                }
+            }
+
+            return (src, dst, p) => {
+                src.copyTo(dst);
+                const refine   = Math.round(p.refine   ?? 0) === 1;
+                const maxFaces = Math.max(1, Math.min(4, Math.round(p.maxFaces ?? 1)));
+
+                if (_loadError) { drawStatus(dst, `FaceMesh: ${_loadError.slice(0, 50)}`); return; }
+
+                if (!_detector || _modelRefine !== refine || _modelMaxFaces !== maxFaces) {
+                    tryInit(refine, maxFaces);
+                    drawStatus(dst, _loading ? 'Loading Face Mesh model...' : 'Initializing...');
+                    return;
+                }
+
+                if (_inferring && _lastFaces.length === 0) drawStatus(dst, 'Running inference...');
+
+                for (const face of _lastFaces) {
+                    const kps = face.keypoints;
+
+                    for (const [name, idx] of Object.entries(CLOSED))
+                        drawContour(dst, kps, idx, COLORS[name], true);
+                    for (const [name, idx] of Object.entries(OPEN))
+                        drawContour(dst, kps, idx, COLORS[name], false);
+
+                    // Iris rings — only available when refineLandmarks is on (points 468-477)
+                    if (refine && kps.length >= 478) {
+                        const irisColor = new cv.Scalar(0, 180, 255, 255);
+                        for (const ring of [[469,470,471,472], [474,475,476,477]]) {
+                            for (let i = 0; i < ring.length; i++) {
+                                const a = kps[ring[i]], b = kps[ring[(i + 1) % ring.length]];
+                                if (a && b)
+                                    cv.line(dst,
+                                        new cv.Point(Math.round(a.x), Math.round(a.y)),
+                                        new cv.Point(Math.round(b.x), Math.round(b.y)),
+                                        irisColor, 1);
+                            }
+                        }
+                    }
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas        = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    _detector.estimateFaces(_inferCanvas)
+                        .then(faces => { _lastFaces = faces; })
+                        .catch(e => console.warn('[facemesh]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
+        bodySegment: (() => {
+            let _net         = null;
+            let _loading     = false;
+            let _loadError   = null;
+            let _inferring   = false;
+            let _lastSeg     = null;
+            let _inferCanvas = null;
+
+            // [R, G, B] per body-part index 0-23
+            const PART_COLORS = [
+                [255,  80,  80], [255,  80,  80],  //  0-1:  face
+                [ 80, 130, 255], [ 80, 130, 255],  //  2-3:  left upper arm
+                [160,  80, 255], [160,  80, 255],  //  4-5:  right upper arm
+                [ 80, 200, 255], [ 80, 200, 255],  //  6-7:  left lower arm
+                [160, 120, 255], [160, 120, 255],  //  8-9:  right lower arm
+                [  0, 230, 255], [  0, 230, 255],  // 10-11: hands
+                [ 57, 255,  20], [ 57, 255,  20],  // 12-13: torso
+                [255, 180,  50], [255, 180,  50],  // 14-15: left upper leg
+                [255, 130,  80], [255, 130,  80],  // 16-17: right upper leg
+                [255, 220,  60], [255, 220,  60],  // 18-19: left lower leg
+                [255, 170,  60], [255, 170,  60],  // 20-21: right lower leg
+                [255, 255,   0], [255, 255,   0],  // 22-23: feet
+            ];
+
+            async function tryInit() {
+                if (_net || _loading || typeof bodyPix === 'undefined') return;
+                _loading   = true;
+                _loadError = null;
+                try {
+                    _net = await bodyPix.load({
+                        architecture: 'MobileNetV1',
+                        outputStride: 16,
+                        multiplier: 0.75,
+                        quantBytes: 2,
+                    });
+                } catch(e) {
+                    console.error('[bodypix]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            return (src, dst, p) => {
+                const threshold = p.threshold ?? 0.7;
+                const opacity   = p.opacity   ?? 0.6;
+
+                src.copyTo(dst);
+
+                if (_loadError) { drawStatus(dst, `BodyPix: ${_loadError.slice(0, 50)}`); return; }
+                if (!_net) {
+                    tryInit();
+                    drawStatus(dst, _loading ? 'Loading BodyPix model...' : 'Initializing...');
+                    return;
+                }
+
+                if (_inferring && !_lastSeg) drawStatus(dst, 'Running inference...');
+
+                if (_lastSeg) {
+                    const seg     = _lastSeg;
+                    const fw      = src.cols, fh = src.rows;
+                    const sw      = seg.width, sh = seg.height;
+                    const dstData = dst.data;
+                    const srcData = src.data;
+
+                    for (let fy = 0; fy < fh; fy++) {
+                        const sy = Math.min(sh - 1, Math.round(fy * sh / fh));
+                        for (let fx = 0; fx < fw; fx++) {
+                            const part = seg.data[sy * sw + Math.min(sw - 1, Math.round(fx * sw / fw))];
+                            if (part >= 0) {
+                                const j  = (fy * fw + fx) * 4;
+                                const [pr, pg, pb] = PART_COLORS[part];
+                                dstData[j]     = Math.round(srcData[j]     * (1 - opacity) + pr * opacity);
+                                dstData[j + 1] = Math.round(srcData[j + 1] * (1 - opacity) + pg * opacity);
+                                dstData[j + 2] = Math.round(srcData[j + 2] * (1 - opacity) + pb * opacity);
+                            }
+                        }
+                    }
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas        = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    _net.segmentPersonParts(_inferCanvas, {
+                        flipHorizontal:        false,
+                        internalResolution:    'medium',
+                        segmentationThreshold: threshold,
+                        maxDetections:         5,
+                        scoreThreshold:        0.3,
+                    })
+                        .then(seg => { _lastSeg = seg; })
+                        .catch(e => console.warn('[bodypix]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
+        // ── Motion ────────────────────────────────────────────────────────────
+
+        opticalFlow: (() => {
+            let _prevGray = null;
+            return (src, dst, p) => {
+                const pyrScale   = p.pyrScale   ?? 0.5;
+                const levels     = Math.max(1, Math.round(p.levels     ?? 3));
+                const winsize    = Math.max(1, Math.round(p.winsize    ?? 15));
+                const iterations = Math.max(1, Math.round(p.iterations ?? 3));
+                const polySigma  = p.polySigma  ?? 1.2;
+
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+
+                if (!_prevGray || _prevGray.rows !== gray.rows || _prevGray.cols !== gray.cols) {
+                    if (_prevGray) _prevGray.delete();
+                    _prevGray = gray.clone();
+                    src.copyTo(dst);
+                    gray.delete();
+                    return;
+                }
+
+                const flow    = new cv.Mat();
+                const mag     = new cv.Mat();
+                const ang     = new cv.Mat();
+                const normMag = new cv.Mat();
+                const hMat    = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                const sMat    = new cv.Mat(src.rows, src.cols, cv.CV_8UC1, new cv.Scalar(255));
+                const hsv     = new cv.Mat();
+                const bgr     = new cv.Mat();
+                try {
+                    cv.calcOpticalFlowFarneback(
+                        _prevGray, gray, flow,
+                        pyrScale, levels, winsize, iterations, 5, polySigma, 0
+                    );
+
+                    const flowVec = new cv.MatVector();
+                    cv.split(flow, flowVec);
+                    const fx = flowVec.get(0);
+                    const fy = flowVec.get(1);
+                    cv.cartToPolar(fx, fy, mag, ang, true);
+                    fx.delete(); fy.delete(); flowVec.delete();
+
+                    cv.normalize(mag, normMag, 0, 255, cv.NORM_MINMAX);
+
+                    const angData = ang.data32F;
+                    const hData   = hMat.data;
+                    for (let i = 0; i < angData.length; i++) {
+                        hData[i] = Math.round(angData[i] * 0.5) % 180;
+                    }
+
+                    const vMat = new cv.Mat();
+                    normMag.convertTo(vMat, cv.CV_8UC1);
+
+                    const hsvVec = new cv.MatVector();
+                    hsvVec.push_back(hMat);
+                    hsvVec.push_back(sMat);
+                    hsvVec.push_back(vMat);
+                    cv.merge(hsvVec, hsv);
+                    hsvVec.delete(); vMat.delete();
+
+                    cv.cvtColor(hsv, bgr, cv.COLOR_HSV2BGR);
+                    cv.cvtColor(bgr, dst, cv.COLOR_BGR2RGBA);
+                } finally {
+                    flow.delete(); mag.delete(); ang.delete();
+                    normMag.delete(); hMat.delete(); sMat.delete();
+                    hsv.delete(); bgr.delete();
+                    _prevGray.delete();
+                    _prevGray = gray.clone();
+                    gray.delete();
+                }
+            };
+        })(),
+
+        frameDiff: (() => {
+            let _prevGray = null;
+            return (src, dst, p) => {
+                let k = Math.max(1, Math.round(p.blur ?? 3));
+                if (k % 2 === 0) k++;
+                const thresh  = p.threshold ?? 25;
+                const dilSize = Math.max(0, Math.round(p.dilate ?? 6));
+
+                const gray = new cv.Mat();
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                if (k > 1) cv.GaussianBlur(gray, gray, new cv.Size(k, k), 0);
+
+                if (!_prevGray || _prevGray.rows !== gray.rows || _prevGray.cols !== gray.cols) {
+                    if (_prevGray) _prevGray.delete();
+                    _prevGray = gray.clone();
+                    src.copyTo(dst);
+                    gray.delete();
+                    return;
+                }
+
+                const diff = new cv.Mat();
+                const mask = new cv.Mat();
+                try {
+                    cv.absdiff(_prevGray, gray, diff);
+                    cv.threshold(diff, mask, thresh, 255, cv.THRESH_BINARY);
+
+                    if (dilSize > 0) {
+                        const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(dilSize, dilSize));
+                        cv.dilate(mask, mask, kernel);
+                        kernel.delete();
+                    }
+
+                    src.copyTo(dst);
+                    const maskData = mask.data;
+                    const dstData  = dst.data;
+                    for (let i = 0, j = 0; i < maskData.length; i++, j += 4) {
+                        if (maskData[i]) {
+                            dstData[j]     = Math.round(dstData[j]     * 0.2);
+                            dstData[j + 1] = Math.min(255, Math.round(dstData[j + 1] * 0.4 + 180));
+                            dstData[j + 2] = Math.round(dstData[j + 2] * 0.2);
+                        }
+                    }
+                } finally {
+                    diff.delete(); mask.delete();
+                    _prevGray.delete();
+                    _prevGray = gray.clone();
+                    gray.delete();
+                }
+            };
+        })(),
+
+        bgSubtract: (() => {
+            let _bg = null;  // CV_32FC4 running-average background model
+
+            return (src, dst, p) => {
+                const history   = Math.max(1, Math.round(p.history ?? 200));
+                const varThresh = p.varThreshold ?? 16;
+                const shadows   = Math.round(p.shadows ?? 1) === 1;
+                const alpha     = 1.0 / history;
+
+                if (!_bg || _bg.rows !== src.rows || _bg.cols !== src.cols) {
+                    if (_bg) _bg.delete();
+                    _bg = new cv.Mat(src.rows, src.cols, cv.CV_32FC4);
+                    src.convertTo(_bg, cv.CV_32FC4);
+                }
+
+                // Exponential moving average background update
+                const bgF32 = _bg.data32F;
+                const srcU8 = src.data;
+                const n     = bgF32.length;
+                const decay = 1 - alpha;
+                for (let i = 0; i < n; i++) {
+                    bgF32[i] = bgF32[i] * decay + srcU8[i] * alpha;
+                }
+
+                src.copyTo(dst);
+                const dstData  = dst.data;
+                const pixCount = src.rows * src.cols;
+
+                for (let px = 0, j = 0; px < pixCount; px++, j += 4) {
+                    const rS = srcU8[j], gS = srcU8[j + 1], bS = srcU8[j + 2];
+                    const rB = bgF32[j], gB = bgF32[j + 1], bB = bgF32[j + 2];
+                    const maxDiff = Math.max(Math.abs(rS - rB), Math.abs(gS - gB), Math.abs(bS - bB));
+
+                    if (maxDiff > varThresh) {
+                        if (shadows) {
+                            const lumS = 0.299 * rS + 0.587 * gS + 0.114 * bS;
+                            const lumB = 0.299 * rB + 0.587 * gB + 0.114 * bB;
+                            if (lumS < lumB * 0.85 && lumB > 20) {
+                                const totS = rS + gS + bS + 1;
+                                const totB = rB + gB + bB + 1;
+                                const colorDiff = Math.abs(rS / totS - rB / totB)
+                                                + Math.abs(gS / totS - gB / totB)
+                                                + Math.abs(bS / totS - bB / totB);
+                                if (colorDiff < 0.15) {
+                                    dstData[j]     = Math.round(dstData[j]     * 0.3);
+                                    dstData[j + 1] = Math.round(dstData[j + 1] * 0.3);
+                                    dstData[j + 2] = Math.min(255, Math.round(dstData[j + 2] * 0.4 + 140));
+                                    continue;
+                                }
+                            }
+                        }
+                        // Foreground: green tint
+                        dstData[j]     = Math.round(dstData[j]     * 0.2);
+                        dstData[j + 1] = Math.min(255, Math.round(dstData[j + 1] * 0.4 + 180));
+                        dstData[j + 2] = Math.round(dstData[j + 2] * 0.2);
+                    } else {
+                        // Background: darken
+                        dstData[j]     = Math.round(dstData[j]     * 0.35);
+                        dstData[j + 1] = Math.round(dstData[j + 1] * 0.35);
+                        dstData[j + 2] = Math.round(dstData[j + 2] * 0.35);
+                    }
+                }
+            };
+        })(),
+
+        bgBlur: (() => {
+            let _bg = null;
+
+            return (src, dst, p) => {
+                const history   = Math.max(1, Math.round(p.history     ?? 200));
+                const varThresh = p.sensitivity ?? 16;
+                const alpha     = 1.0 / history;
+                let   blurK     = Math.max(1, Math.round(p.blur        ?? 21));
+                let   featherK  = Math.max(1, Math.round(p.feather     ?? 15));
+                if (blurK    % 2 === 0) blurK++;
+                if (featherK % 2 === 0) featherK++;
+
+                if (!_bg || _bg.rows !== src.rows || _bg.cols !== src.cols) {
+                    if (_bg) _bg.delete();
+                    _bg = new cv.Mat(src.rows, src.cols, cv.CV_32FC4);
+                    src.convertTo(_bg, cv.CV_32FC4);
+                }
+
+                const bgF32    = _bg.data32F;
+                const srcU8    = src.data;
+                const pixCount = src.rows * src.cols;
+                const decay    = 1 - alpha;
+
+                for (let i = 0; i < bgF32.length; i++) {
+                    bgF32[i] = bgF32[i] * decay + srcU8[i] * alpha;
+                }
+
+                const fgMask  = new cv.Mat(src.rows, src.cols, cv.CV_8UC1);
+                const rawMask = fgMask.data;
+                for (let px = 0, j = 0; px < pixCount; px++, j += 4) {
+                    const maxDiff = Math.max(
+                        Math.abs(srcU8[j]     - bgF32[j]),
+                        Math.abs(srcU8[j + 1] - bgF32[j + 1]),
+                        Math.abs(srcU8[j + 2] - bgF32[j + 2])
+                    );
+                    rawMask[px] = maxDiff > varThresh ? 255 : 0;
+                }
+
+                const blurred  = new cv.Mat();
+                const softMask = new cv.Mat();
+                try {
+                    cv.GaussianBlur(fgMask, softMask, new cv.Size(featherK, featherK), 0);
+                    cv.GaussianBlur(src,    blurred,  new cv.Size(blurK,    blurK),    0);
+
+                    src.copyTo(dst);
+                    const dstData  = dst.data;
+                    const blurData = blurred.data;
+                    const mData    = softMask.data;
+
+                    for (let px = 0, j = 0; px < pixCount; px++, j += 4) {
+                        const t = mData[px] / 255;
+                        dstData[j]     = Math.round(srcU8[j]     * t + blurData[j]     * (1 - t));
+                        dstData[j + 1] = Math.round(srcU8[j + 1] * t + blurData[j + 1] * (1 - t));
+                        dstData[j + 2] = Math.round(srcU8[j + 2] * t + blurData[j + 2] * (1 - t));
+                    }
+                } finally {
+                    blurred.delete(); softMask.delete(); fgMask.delete();
+                }
+            };
+        })(),
+
+        portraitBlur: (() => {
+            let _seg         = null;
+            let _loading     = false;
+            let _loadError   = null;
+            let _inferring   = false;
+            let _maskData    = null;  // Float32Array, one value per pixel, person=1
+            let _maskW       = 0;
+            let _maskH       = 0;
+            let _inferCanvas = null;
+            let _maskCanvas  = null;
+            let _maskCtx     = null;
+
+            async function tryInit() {
+                if (_seg || _loading) return;
+                _loading   = true;
+                _loadError = null;
+                try {
+                    if (typeof SelfieSegmentation === 'undefined') {
+                        await new Promise((resolve, reject) => {
+                            const s       = document.createElement('script');
+                            s.src         = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js';
+                            s.crossOrigin = 'anonymous';
+                            s.onload      = resolve;
+                            s.onerror     = () => reject(new Error('Failed to load MediaPipe script'));
+                            document.head.appendChild(s);
+                        });
+                    }
+                    const seg = new SelfieSegmentation({
+                        locateFile: (file) =>
+                            `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+                    });
+                    seg.setOptions({ modelSelection: 1 });
+                    seg.onResults((results) => {
+                        const mask = results.segmentationMask;
+                        if (!_maskCanvas) {
+                            _maskCanvas = document.createElement('canvas');
+                            _maskCtx    = _maskCanvas.getContext('2d', { willReadFrequently: true });
+                        }
+                        _maskCanvas.width  = mask.width;
+                        _maskCanvas.height = mask.height;
+                        _maskCtx.drawImage(mask, 0, 0);
+                        const imgData = _maskCtx.getImageData(0, 0, mask.width, mask.height);
+                        _maskData = new Float32Array(mask.width * mask.height);
+                        for (let i = 0; i < _maskData.length; i++) {
+                            _maskData[i] = imgData.data[i * 4] / 255;
+                        }
+                        _maskW     = mask.width;
+                        _maskH     = mask.height;
+                        _inferring = false;
+                    });
+                    await seg.initialize();
+                    _seg = seg;
+                } catch (e) {
+                    console.error('[portrait-blur]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            return (src, dst, p) => {
+                let blurK        = Math.max(1, Math.round(p.blur ?? 21));
+                if (blurK % 2 === 0) blurK++;
+                const featherSig = Math.max(0, p.feather ?? 5);
+
+                src.copyTo(dst);
+
+                if (_loadError) { drawStatus(dst, 'MediaPipe error — see console'); return; }
+                if (!_seg) {
+                    tryInit();
+                    drawStatus(dst, _loading ? 'Loading MediaPipe model...' : 'Initializing...');
+                    return;
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas ||
+                        _inferCanvas.width  !== src.cols ||
+                        _inferCanvas.height !== src.rows) {
+                        _inferCanvas        = document.createElement('canvas');
+                        _inferCanvas.width  = src.cols;
+                        _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    _seg.send({ image: _inferCanvas }).catch(e => {
+                        console.warn('[portrait-blur]', e);
+                        _inferring = false;
+                    });
+                }
+
+                if (!_maskData) return;
+
+                const iw       = src.cols;
+                const ih       = src.rows;
+                const fgMat    = new cv.Mat(ih, iw, cv.CV_8UC1);
+                const softMask = new cv.Mat();
+                const blurred  = new cv.Mat();
+                try {
+                    // Scale mask to frame size
+                    const fgData = fgMat.data;
+                    for (let r = 0; r < ih; r++) {
+                        const mr = Math.min(_maskH - 1, Math.round(r * _maskH / ih));
+                        for (let c = 0; c < iw; c++) {
+                            const mc = Math.min(_maskW - 1, Math.round(c * _maskW / iw));
+                            fgData[r * iw + c] = Math.round(_maskData[mr * _maskW + mc] * 255);
+                        }
+                    }
+
+                    if (featherSig > 0)
+                        cv.GaussianBlur(fgMat, softMask, new cv.Size(0, 0), featherSig);
+                    else
+                        fgMat.copyTo(softMask);
+                    cv.GaussianBlur(src, blurred, new cv.Size(blurK, blurK), 0);
+
+                    const srcU8    = src.data;
+                    const dstData  = dst.data;
+                    const blurData = blurred.data;
+                    const smData   = softMask.data;
+                    const pixCount = iw * ih;
+
+                    for (let px = 0, j = 0; px < pixCount; px++, j += 4) {
+                        const t = smData[px] / 255;
+                        dstData[j]     = Math.round(srcU8[j]     * t + blurData[j]     * (1 - t));
+                        dstData[j + 1] = Math.round(srcU8[j + 1] * t + blurData[j + 1] * (1 - t));
+                        dstData[j + 2] = Math.round(srcU8[j + 2] * t + blurData[j + 2] * (1 - t));
+                    }
+                } finally {
+                    fgMat.delete(); softMask.delete(); blurred.delete();
+                }
+            };
+        })(),
+
+        // ── Stylize ───────────────────────────────────────────────────────────
+
+        pencilSketch: (src, dst, p) => {
+            let k = Math.max(1, Math.round(p.blur ?? 21));
+            if (k % 2 === 0) k++;
+            const sigma  = p.sigma  ?? 0;
+            const invert = Math.round(p.invert ?? 0) === 1;
+
+            const gray    = new cv.Mat();
+            const inv     = new cv.Mat();
+            const blurred = new cv.Mat();
+            const divisor = new cv.Mat();
+            const sketch  = new cv.Mat();
+            try {
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                cv.bitwise_not(gray, inv);
+                cv.GaussianBlur(inv, blurred, new cv.Size(k, k), sigma);
+                cv.bitwise_not(blurred, divisor);
+                cv.divide(gray, divisor, sketch, 255);
+                if (invert) cv.bitwise_not(sketch, sketch);
+                cv.cvtColor(sketch, dst, cv.COLOR_GRAY2RGBA);
+            } finally {
+                gray.delete(); inv.delete(); blurred.delete();
+                divisor.delete(); sketch.delete();
+            }
+        },
+
+        pixelate: (src, dst, p) => {
+            const blockSize = Math.max(2, Math.round(p.blockSize  ?? 16));
+            const satScale  = p.saturation ?? 1;
+
+            const w  = src.cols;
+            const h  = src.rows;
+            const sw = Math.max(1, Math.round(w / blockSize));
+            const sh = Math.max(1, Math.round(h / blockSize));
+
+            let base = new cv.Mat();
+            if (Math.abs(satScale - 1) > 0.005) {
+                const bgr = new cv.Mat();
+                const hsv = new cv.Mat();
+                cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
+                cv.cvtColor(bgr, hsv, cv.COLOR_BGR2HSV);
+                bgr.delete();
+
+                const vec = new cv.MatVector();
+                cv.split(hsv, vec);
+                const hCh = vec.get(0), sCh = vec.get(1), vCh = vec.get(2);
+                cv.convertScaleAbs(sCh, sCh, satScale, 0);
+                cv.merge(vec, hsv);
+                hCh.delete(); sCh.delete(); vCh.delete(); vec.delete();
+
+                const bgrOut = new cv.Mat();
+                cv.cvtColor(hsv, bgrOut, cv.COLOR_HSV2BGR);
+                hsv.delete();
+                cv.cvtColor(bgrOut, base, cv.COLOR_BGR2RGBA);
+                bgrOut.delete();
+            } else {
+                src.copyTo(base);
+            }
+
+            const small = new cv.Mat();
+            try {
+                cv.resize(base, small, new cv.Size(sw, sh), 0, 0, cv.INTER_NEAREST);
+                cv.resize(small, dst,  new cv.Size(w,  h),  0, 0, cv.INTER_NEAREST);
+            } finally {
+                small.delete();
+                base.delete();
+            }
+        },
+
+        cartoon: (src, dst, p) => {
+            const passes = Math.max(1, Math.round(p.passes     ?? 3));
+            const sigma  = p.sigmaColor ?? 75;
+            let   eb     = Math.max(3, Math.round(p.edgeBlock  ?? 9));
+            if (eb % 2 === 0) eb++;
+            const edgeC  = p.edgeC ?? 7;
+
+            const bgr = new cv.Mat();
+            cv.cvtColor(src, bgr, cv.COLOR_RGBA2BGR);
+
+            let cur  = bgr.clone();
+            const tmp = new cv.Mat();
+            for (let i = 0; i < passes; i++) {
+                cv.bilateralFilter(cur, tmp, 9, sigma, sigma);
+                tmp.copyTo(cur);
+            }
+            tmp.delete(); bgr.delete();
+
+            const gray  = new cv.Mat();
+            const edges = new cv.Mat();
+            cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+            cv.medianBlur(gray, gray, 5);
+            cv.adaptiveThreshold(gray, edges, 255, cv.ADAPTIVE_THRESH_MEAN_C, cv.THRESH_BINARY, eb, edgeC);
+            gray.delete();
+
+            const edgesBGR = new cv.Mat();
+            cv.cvtColor(edges, edgesBGR, cv.COLOR_GRAY2BGR);
+            edges.delete();
+            cv.bitwise_and(cur, edgesBGR, cur);
+            edgesBGR.delete();
+
+            cv.cvtColor(cur, dst, cv.COLOR_BGR2RGBA);
+            cur.delete();
+        },
     };
 
     function rotateMat(mat, deg) {
@@ -575,10 +1598,10 @@ window.cvEngine = (() => {
         pickColorAt(clientX, clientY) {
             if (!_tempCtx || !_canvas) return null;
 
-            const rect = _canvas.getBoundingClientRect();
-            const scale   = Math.min(rect.width / _canvas.width, rect.height / _canvas.height);
-            const offX    = (rect.width  - _canvas.width  * scale) / 2;
-            const offY    = (rect.height - _canvas.height * scale) / 2;
+            const rect  = _canvas.getBoundingClientRect();
+            const scale = Math.min(rect.width / _canvas.width, rect.height / _canvas.height);
+            const offX  = (rect.width  - _canvas.width  * scale) / 2;
+            const offY  = (rect.height - _canvas.height * scale) / 2;
 
             let   bx = Math.round((clientX - rect.left - offX) / scale);
             const by = Math.round((clientY - rect.top  - offY) / scale);

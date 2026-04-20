@@ -13,8 +13,23 @@
         <!-- Left: Tools -->
         <div class="cv-panel cv-tools">
             <div class="panel-label">Tools</div>
-            @{string? _lastCategory = null;}
-            @foreach (var algo in _algorithms)
+            @if (_activeTagFilter != null)
+            {
+                <div class="tag-filter-bar">
+                    <span>@_activeTagFilter only</span>
+                    <button class="tag-filter-clear" @onclick="() => _activeTagFilter = null">
+                        <i class="fa-solid fa-xmark"></i>
+                    </button>
+                </div>
+            }
+            <div class="cv-tools-scroll">
+            @{
+                string? _lastCategory = null;
+                var _visible = _activeTagFilter == null
+                    ? _algorithms
+                    : _algorithms.Where(a => _tags.TryGetValue(a.Id, out var t) && t.Contains(_activeTagFilter));
+            }
+            @foreach (var algo in _visible)
             {
                 var a = algo;
                 if (a.Category != _lastCategory)
@@ -22,11 +37,25 @@
                     _lastCategory = a.Category;
                     <div class="tool-category">@a.Category</div>
                 }
-                <button class="tool-btn @(_selected.Id == a.Id ? "active" : "")"
-                        @onclick="() => SelectAlgorithm(a)">
-                    @a.Name
-                </button>
+                <div class="tool-item @(_selected.Id == a.Id ? "active" : "")"
+                     @onclick="() => SelectAlgorithm(a)">
+                    <button class="tool-btn">@a.Name</button>
+                    @if (_tags.TryGetValue(a.Id, out var chipTags) && chipTags.Length > 0)
+                    {
+                        <div class="tool-tags">
+                            @foreach (var tag in chipTags)
+                            {
+                                var t = tag;
+                                <span class="tag-chip @(_activeTagFilter == t ? "active" : "")"
+                                      data-tag="@t"
+                                      @onclick="() => ToggleTagFilter(t)"
+                                      @onclick:stopPropagation="true">@t</span>
+                            }
+                        </div>
+                    }
+                </div>
             }
+            </div>
             <button class="info-toggle-btn @(_infoOpen ? "active" : "")"
                     title="@(_infoOpen ? "Hide algorithm details" : "How it works")"
                     @onclick="() => _infoOpen = !_infoOpen">
@@ -92,6 +121,34 @@
                             <p>Each <code>matchTemplate</code> call runs in O(W·H·tw·th) time. At maximum settings the grid can be 65 combinations per frame, which is where performance degrades. Template matching also has no concept of object class; it is looking for the exact captured patch, so illumination changes or occlusion can cause it to lose the target.</p>
                             break;
 
+                        case "handTrack":
+                            <p>MediaPipe Hands detects 21 3D landmarks per hand from a single RGB frame. The 21 keypoints cover the wrist, four joints per finger (MCP, PIP, DIP, tip), and the thumb CMC, spanning the full kinematic chain of the hand. Each detected hand also returns a handedness label. Right hands are drawn in green, left hands in cyan, so both are distinguishable when two hands appear simultaneously.</p>
+                            <p><strong>Two-stage pipeline.</strong> Detection runs in two stages. First, a palm detector (BlazePalm) locates hand bounding boxes in the full image at low resolution. BlazePalm is a single-shot detector optimized to find the relatively featureless rectangular region of the palm, which is easier to detect reliably than individual fingers. Second, each detected palm is cropped, aligned, and passed into a landmark regression network that outputs the 21 keypoints. Once a hand is found, subsequent frames feed the pre-aligned crop directly into regression, skipping BlazePalm entirely until the hand is lost, which is what gives tracking its low per-frame cost.</p>
+                            <p><strong>Full vs Lite model.</strong> The Full model uses a wider regression network that handles extreme wrist angles, partially occluded fingers, and hands at the frame edge more reliably. The Lite model is a pruned version that runs faster at the cost of accuracy on those difficult cases. Both run via TF.js on the WebGL backend. Switching between them or changing the max-hands count disposes the current detector and creates a new one, which takes a few seconds.</p>
+                            <p>The returned keypoints include x, y, and z coordinates. The z value is relative depth normalized to the wrist, with smaller values closer to the camera. Only x and y are used for the 2D overlay here. Individual keypoint scores are not always populated by the TF.js runtime; the confidence slider primarily controls whether whole-hand detections below the overall hand score are shown.</p>
+                            break;
+
+                        case "poseEstimate":
+                            <p>MoveNet is a single-person pose estimation model from Google that detects 17 anatomical keypoints: nose, eyes, ears, shoulders, elbows, wrists, hips, knees, and ankles. Each keypoint is returned as pixel coordinates plus a confidence score between 0 and 1. The skeleton overlay draws lines along anatomically plausible joint pairs and marks each detected point with a circle.</p>
+                            <p><strong>Architecture.</strong> MoveNet uses a MobileNetV2 encoder paired with a Feature Pyramid Network decoder. The prediction heads output one heatmap per keypoint (indicating the probability distribution over spatial locations), a set of local offset vectors for sub-pixel refinement within each heatmap cell, and per-edge displacement fields that associate keypoints belonging to the same person. The model runs at 192x192 (Lightning) or 256x256 (Thunder); input frames are resized to that resolution before inference.</p>
+                            <p><strong>Lightning vs Thunder.</strong> Lightning is tuned for speed, typically running at 50 or more frames per second on a mid-range GPU via WebGL. Thunder uses more filters and a larger input, trading some speed for higher accuracy on occluded joints and fast-moving limbs. Switching between them disposes the current detector and loads a new one, which takes a few seconds while the model weights download and compile to WebGL shaders.</p>
+                            <p>Inference runs asynchronously so the video feed stays smooth. The <code>estimatePoses</code> call fires once per render frame; while TF.js is computing on the GPU, the draw loop continues overlaying the most recently completed skeleton. This produces a small lag between movement and the overlay, which is unavoidable when inference takes longer than a single frame interval.</p>
+                            break;
+
+                        case "faceLandmarks":
+                            <p>MediaPipe Face Mesh detects 468 facial landmarks per face, or 478 with refinement enabled. The points form a dense mesh covering the full face surface. This implementation draws feature contours color-coded by region: green for the face oval and eyes, cyan for eyebrows, orange for the nose, pink for the lips, and blue iris rings when refine is on.</p>
+                            <p><strong>Two-stage pipeline.</strong> A face detector first locates bounding boxes in the full frame. Each detected face is then cropped, normalized, and passed through a landmark regression network that outputs 468 3D points in the local crop coordinate system. Those are projected back to image pixel coordinates for rendering. Because the regressor works on a pre-aligned crop rather than the full image, it is lightweight enough to run every frame after the initial face detection fires.</p>
+                            <p><strong>Refined landmarks.</strong> With Refine enabled the model outputs 478 points. The extra 10 are iris keypoints: one center and four cardinal ring points per eye, arranged as a circle. These enable gaze direction estimation and virtual pupil effects. Refine also improves accuracy along the lip boundary. Toggling it disposes the current detector and loads a new one, which takes a few seconds.</p>
+                            <p>Inference fires asynchronously each frame. The returned keypoints include a z coordinate encoding relative depth within the face (values closer to zero are nearer the camera), but only x and y are used for the 2D contour overlay. Max Faces controls how many detections the model returns per frame; each additional face adds proportionally to inference time.</p>
+                            break;
+
+                        case "bodySegment":
+                            <p>BodyPix classifies each pixel as one of 24 body-part regions or background. The 24 classes cover both sides of each area: face, upper and lower arms, hands, torso, upper and lower legs, and feet. Each region is overlaid with a distinct color blended over the original video, making the full body silhouette and its internal structure visible in real time.</p>
+                            <p><strong>Architecture.</strong> BodyPix uses a MobileNetV1 backbone with a fully convolutional head that simultaneously produces a person/background mask and a per-pixel part classification. The backbone operates at a downsampled resolution controlled by the output stride (16 here), then the segmentation maps are bilinearly upsampled to match the input canvas size. The model is loaded with a width multiplier of 0.75 and 2-byte weight quantization, which halves memory use with minimal accuracy loss compared to the full-precision weights.</p>
+                            <p><strong>Threshold.</strong> The segmentation threshold sets the minimum probability required to label a pixel as belonging to a person before the part classifier assigns it a region. Lower values capture more of the body silhouette, including soft edges around hair and loose clothing, but also introduce background bleed. Higher values produce a tighter mask that may leave gaps over low-contrast skin or dark clothing against similar backgrounds.</p>
+                            <p>Inference runs asynchronously each frame so the video stays smooth. The result is a flat <code>Int32Array</code> with one index per pixel: -1 for background, 0 to 23 for body parts. The compositing loop reads this array and linearly interpolates between the original pixel color and the region color at the specified opacity. Background pixels (index -1) are left untouched, so the original video shows through wherever no person is detected.</p>
+                            break;
+
                         case "cocoSsd":
                             <p>Runs MobileNet SSD via TensorFlow.js, a neural network trained on the 80-class COCO dataset. The model runs entirely in the browser using WebGL for GPU acceleration. Inference fires asynchronously so the video feed continues at full frame rate while detections update as fast as the GPU allows, typically 5-15 fps on a mid-range desktop.</p>
                             <p><strong>MobileNet backbone.</strong> MobileNet replaces the standard convolutions of a full CNN with depthwise separable convolutions. Each standard conv is split into a depthwise conv (one filter per input channel, zero cross-channel mixing) followed by a pointwise 1x1 conv (mixes channels). The depthwise step costs <code>Dk²M</code> operations and the pointwise step costs <code>DM²</code>, versus <code>Dk²M²</code> for a standard conv. For a 3x3 kernel and 512 channels this is roughly 8x fewer multiply-adds, which is what makes MobileNet fast enough to run on constrained hardware.</p>
@@ -107,6 +164,72 @@
                             <p><strong>AdaBoost training.</strong> The cascade was trained offline by running AdaBoost to select the most discriminative subset of Haar features. Each boosting round picks one weak classifier (a single thresholded feature), and the weighted combination of those forms a strong classifier for one stage. The full cascade has around 20 stages, with later stages testing more features and being proportionally slower.</p>
                             <p><strong>Cascade rejection.</strong> Stages run in order from simplest to most complex. A window advances only if it passes the current stage; failing any stage discards it immediately. In practice roughly half of all non-face windows are rejected at stage one, which tests only the single best feature. Since most image regions are not faces, the average cost per window stays very low despite the total number of features.</p>
                             <p><code>scaleFactor</code> controls how much the detection window grows between pyramid levels (1.1 means 10% per step; smaller values are more thorough but require more passes). <code>minNeighbors</code> requires a candidate to be confirmed by N overlapping detections from neighboring windows before being accepted, trading recall for fewer false positives. The cascade loaded here was trained on frontal face data, so profile faces and extreme head angles are generally not detected.</p>
+                            break;
+
+                        case "opticalFlow":
+                            <p>Dense optical flow estimates the per-pixel motion vector field between two consecutive frames. This implementation uses the Farneback algorithm, which fits a polynomial to the local intensity structure and tracks how that polynomial shifts from one frame to the next.</p>
+                            <p>The output is rendered as a hue-saturation-value image where hue encodes motion direction and brightness encodes motion magnitude. A pixel moving fast toward the right appears as a bright pure-red point; stationary regions are black. Direction comes from <code>cartToPolar</code> applied to the two-channel flow field, with the angle scaled to the 0-179 OpenCV hue range. Normalized magnitude goes into the V channel.</p>
+                            <p>The pyramid parameters control the scale-space search. At each level the image is downsampled by <code>pyrScale</code>, making it possible to track large displacements that are invisible at full resolution. Window Size sets the local averaging radius for the polynomial fitting step. Larger windows are more noise-robust but blur out fine motion boundaries. More Iterations improve accuracy at each level at the cost of per-frame processing time.</p>
+                            break;
+
+                        case "frameDiff":
+                            <p>Computes the absolute per-pixel difference between the current frame and the previous one, then thresholds that difference to produce a binary motion mask. Pixels that changed by more than the threshold are classified as moving and tinted green; everything else shows the original image.</p>
+                            <p>A Gaussian pre-blur is applied before differencing to suppress high-frequency noise and camera sensor grain that would otherwise produce a speckled mask on scenes with no real motion. The blur kernel must be odd; even values are automatically incremented to the next odd number.</p>
+                            <p>Dilation expands detected regions outward using an elliptical structuring element, merging nearby blobs into solid contiguous areas. This is useful when a moving object produces a patchy mask because parts of it match the background color or have low texture contrast relative to the threshold.</p>
+                            break;
+
+                        case "bgSubtract":
+                            <p>Background subtraction using the MOG2 (Mixture of Gaussians 2) model. Each pixel's intensity history is modeled as a mixture of Gaussians. After a warm-up period, pixels that fall outside their learned distribution are classified as foreground (green tint); stable background pixels are darkened.</p>
+                            <p>MOG2 adapts continuously, so a stationary object that enters the scene will eventually be absorbed into the background model. The History slider controls how many frames contribute to this model. Fewer frames mean faster adaptation to scene changes but more false detections during camera motion or gradual lighting shifts.</p>
+                            <p>Shadow detection is a separate classification step. Pixels that are darker than the background model but preserve the same relative color distribution are labeled as shadows (blue tint) rather than foreground. Disabling it reduces false positives in high-contrast lighting but may cause cast shadows to bleed into the foreground mask.</p>
+                            break;
+
+                        case "bgBlur":
+                            <p>Combines background subtraction with Gaussian blur to produce a real-time depth-of-field effect similar to video conferencing portrait mode. The foreground is kept sharp while everything behind it is defocused.</p>
+                            <p>A per-pixel exponential moving average tracks the background over time. Any pixel whose color deviates from its model by more than the Sensitivity threshold is classified as foreground. History controls how many frames contribute to the model. Fewer frames adapt faster to lighting changes; more frames give a more stable estimate in static scenes.</p>
+                            <p>Before compositing, the binary foreground mask is blurred with a Gaussian to feather its edges. This avoids a hard cutout look by creating a smooth transition zone between sharp foreground and blurred background. The final output blends the original frame with the Gaussian-blurred version using the soft mask as a per-pixel alpha.</p>
+                            break;
+
+                        case "portraitBlur":
+                            <p>Uses MediaPipe Selfie Segmentation to classify each pixel as person or background from a single frame — no background model or warm-up time required. The segmentation model was trained on large datasets of people and recognizes the person silhouette directly, which is how tools like Google Meet handle portrait blur.</p>
+                            <p>Inference runs asynchronously so the video feed stays smooth. The model outputs a confidence mask (0-1 per pixel, 1 = person). That mask is feathered with a Gaussian blur before compositing, creating a gradual transition at the person's edges rather than a hard cutout. The background receives a Gaussian blur at the specified strength, while the foreground region shows the original sharp frame.</p>
+                            <p>Compared to the Background Blur algorithm, this approach works instantly and handles any background without needing to learn it. The tradeoff is a model download on first use and slightly higher per-frame GPU cost. Feather controls the blend zone width at the silhouette boundary.</p>
+                            break;
+
+                        case "houghLines":
+                            <p>The probabilistic Hough transform detects straight line segments by voting in a 2D accumulator space parameterized by angle and perpendicular distance from the origin. Each edge pixel votes for all lines it could belong to; accumulator bins with enough votes are declared line candidates, then extended into pixel-coordinate segments.</p>
+                            <p>The input is a Canny edge map computed with fixed thresholds (50/150). Detected segments are drawn in neon green over the original frame. Vote Threshold controls how many edge pixels must support a line for it to be retained. Lower values produce more detections but also more noise, particularly on textured surfaces.</p>
+                            <p>Min Length and Max Gap are specific to the probabilistic variant (<code>HoughLinesP</code>). Min Length discards short fragments. Max Gap allows separate collinear segments to be merged if the gap between them is small enough, which is useful for detecting dashed or interrupted lines such as road markings.</p>
+                            break;
+
+                        case "houghCircles":
+                            <p>Detects circles using the gradient-based Hough circle transform, which works in two stages. First, a Canny edge map is computed internally. Then each edge pixel votes in a 2D accumulator for the set of circle centers consistent with its gradient direction. Accumulator peaks become center candidates, and each center is then matched to a radius.</p>
+                            <p>A 9x9 Gaussian pre-blur is applied before detection to reduce false positives from noise and sharp pixel-level artifacts. Edge Sensitivity (param1) is the Canny high threshold passed to the internal edge detector. Centre Threshold (param2) is the accumulator vote count needed to declare a center. Lowering it finds more circles at the cost of more false positives.</p>
+                            <p>Min and Max Radius constrain the search to a range of circle sizes, which both improves accuracy and reduces computation by skipping implausible radii. Setting both to 0 removes all size constraints. Detected circles are drawn with a neon green ring and an orange center dot to distinguish the estimated center from the circumference.</p>
+                            break;
+
+                        case "harrisCorner":
+                            <p>Corner detection based on the structure tensor (second-moment matrix) of the local gradient. For each pixel, the gradient covariance matrix M is computed over a Block Size neighborhood using Sobel derivatives of aperture Sobel Size. The Harris response <code>R = det(M) - k * trace(M)^2</code> measures how much the local patch varies in multiple directions simultaneously.</p>
+                            <p>Pixels with R above the threshold are corners. The response map is normalized to 0-255 before thresholding so that the slider value is scene-independent. Corners are marked with small neon green circles. Edges produce moderate R values; flat regions produce values near zero; true corners produce the highest values.</p>
+                            <p>The Harris k parameter governs the trade-off between corner and edge responses. Typical values are 0.04 to 0.06. At lower values the detector is more sensitive but also reports more edge points as corners. Sobel Size must be odd; even values are incremented automatically. Larger values capture coarser-scale gradient structure at the cost of spatial precision.</p>
+                            break;
+
+                        case "pencilSketch":
+                            <p>Produces a pencil drawing effect using the dodge-blend technique from digital photo editing. The grayscale frame is inverted, blurred, and then divided into the original grayscale. This locally amplifies intensity where the blurred inverse is light (no dark edges nearby) and compresses it where it is dark (edges are present).</p>
+                            <p>Stroke Size controls the blur kernel applied to the inverted image. Larger values produce wider, bolder pencil strokes. Softness (sigma) is the Gaussian standard deviation for that blur; at 0 it is derived from the kernel size automatically. Invert flips the output palette to give white strokes on a black background rather than dark strokes on white.</p>
+                            <p>The Colors parameter adds posterized color from the original frame. A lookup table maps the live image to N discrete color levels, and the sketch grayscale value multiplies each color channel as a transparency mask. At Colors=1 the output is pure grayscale. Higher values progressively reveal the original hues wherever the paper is not darkened by pencil strokes.</p>
+                            break;
+
+                        case "pixelate":
+                            <p>Downsamples the image to a coarse grid and then upsamples back to the original size using nearest-neighbor interpolation. Because nearest-neighbor copies pixel values without blending, each original pixel is assigned the color of the grid block it falls into, producing the characteristic mosaic appearance.</p>
+                            <p>Block Size controls the coarseness: a value of 16 means each output block represents a 16x16 region averaged to one color. Larger values give a more retro low-resolution look. The implementation uses two <code>cv.resize</code> calls: a downscale to compute block averages via area averaging, and an upscale with <code>INTER_NEAREST</code> to reproduce the blocky output without any smoothing.</p>
+                            <p>The Saturation multiplier is applied in HSV space before pixelation. Values above 1 boost color vibrancy; below 1 fade toward grayscale. At exactly 1.0 the saturation step is skipped entirely to avoid the colorspace round-trip cost.</p>
+                            break;
+
+                        case "cartoon":
+                            <p>Combines bilateral filtering for flat-color regions with adaptive edge detection to produce a cartoon or comic-book style. The bilateral filter smooths texture while preserving hard color boundaries, because it weights pixel contributions by both spatial distance and color similarity simultaneously.</p>
+                            <p>Smooth Passes applies the bilateral filter repeatedly. Each pass further flattens mid-frequency texture while leaving sharp transitions intact. Color Range (sigmaColor) sets how different two pixels' colors can be and still influence each other. Larger values blend more aggressively across color boundaries, producing wider flat regions at the cost of bleeding at sharp edges.</p>
+                            <p>The edge layer is computed via adaptive thresholding on a median-blurred grayscale image. Adaptive thresholding computes a per-pixel threshold from a local neighborhood mean, making it robust to non-uniform lighting. Edge Block is the neighborhood size for this step; Edge Offset is the constant subtracted from the local mean to sharpen or soften what counts as an edge. The binary mask is ANDed with the smoothed color image to overlay dark outlines.</p>
                             break;
                     }
                 </div>
@@ -150,25 +273,40 @@
                 {
                     var param = p;
                     <div class="slider-group @(_openInfo == param.Id ? "info-open" : "")">
-                        <div class="slider-header">
-                            <span class="slider-label">@param.Label</span>
-                            <div class="slider-header-right">
-                                <span class="slider-value">@param.Value.ToString("0.##")</span>
-                                @if (!string.IsNullOrEmpty(param.Description))
-                                {
-                                    <button class="info-btn"
-                                            title="@param.Description"
-                                            @onclick="() => ToggleInfo(param.Id)"
-                                            aria-label="Info about @param.Label">i</button>
-                                }
+                        @if (!param.IsCheckbox)
+                        {
+                            <div class="slider-header">
+                                <span class="slider-label">@param.Label</span>
+                                <div class="slider-header-right">
+                                    <span class="slider-value">@param.DisplayValue</span>
+                                    @if (!string.IsNullOrEmpty(param.Description))
+                                    {
+                                        <button class="info-btn"
+                                                title="@param.Description"
+                                                @onclick="() => ToggleInfo(param.Id)"
+                                                aria-label="Info about @param.Label">i</button>
+                                    }
+                                </div>
                             </div>
-                        </div>
-                        <input type="range"
-                               min="@param.Min.ToString("0.##")"
-                               max="@param.Max.ToString("0.##")"
-                               step="@param.Step.ToString("0.##")"
-                               value="@param.Value.ToString("0.##")"
-                               @oninput="e => OnParamChange(param, e)" />
+                        }
+                        @if (param.IsCheckbox)
+                        {
+                            <label class="option-check" style="padding-top:0.1rem">
+                                <input type="checkbox"
+                                       checked="@(param.Value >= 1)"
+                                       @onchange="e => OnCheckboxParamChange(param, e)" />
+                                @param.Label
+                            </label>
+                        }
+                        else
+                        {
+                            <input type="range"
+                                   min="@param.Min.ToString("0.##")"
+                                   max="@param.Max.ToString("0.##")"
+                                   step="@param.Step.ToString("0.##")"
+                                   value="@param.Value.ToString("0.##")"
+                                   @oninput="e => OnParamChange(param, e)" />
+                        }
                         @if (!string.IsNullOrEmpty(param.Description))
                         {
                             <div class="slider-desc">@param.Description</div>
@@ -249,15 +387,21 @@
 @code {
     // ── Models ────────────────────────────────────────────────────────────────
 
-    class AlgoParam(string id, string label, double min, double max, double value, double step = 1, string description = "")
+    class AlgoParam(string id, string label, double min, double max, double value, double step = 1, string description = "", bool isCheckbox = false, bool isPow2Display = false)
     {
-        public string Id          { get; } = id;
-        public string Label       { get; } = label;
-        public double Min         { get; } = min;
-        public double Max         { get; } = max;
-        public double Value       { get; set; } = value;
-        public double Step        { get; } = step;
-        public string Description { get; } = description;
+        public string Id            { get; } = id;
+        public string Label         { get; } = label;
+        public double Min           { get; } = min;
+        public double Max           { get; } = max;
+        public double Value         { get; set; } = value;
+        public double Step          { get; } = step;
+        public string Description   { get; } = description;
+        public bool   IsCheckbox    { get; } = isCheckbox;
+        public bool   IsPow2Display { get; } = isPow2Display;
+
+        public string DisplayValue => IsPow2Display
+            ? (Value <= 0 ? "0" : ((int)Math.Pow(2, Value)).ToString())
+            : Value.ToString("0.##");
     }
 
     record AlgorithmDef(string Id, string Name, string Category, List<AlgoParam> Params);
@@ -295,6 +439,17 @@
             new("scaleRange",     "Size Flexibility", 0,   0.5, 0,    0.05, "How much the object can shrink or grow relative to the captured template. 0 = exact size only."),
             new("threshold",      "Match Threshold",  0.1, 1.0, 0.5,  0.05, "Minimum confidence required to show a detection. Lower values detect looser matches; higher values are stricter."),
         ]),
+        new("handTrack", "Hand Tracking", "AI / ML",
+        [
+            new("confThresh", "Confidence", 0.1, 0.9, 0.5, 0.05, "Minimum keypoint score to display. Hand keypoints often lack individual scores; this mainly filters whole-hand detections."),
+            new("maxHands",   "Max Hands",  1,   4,   2,   1,    "Maximum number of hands to detect simultaneously. Higher values are slower."),
+            new("lite",       "Lite Model", 0,   1,   0,   1,    "Use the Lite model (faster) instead of Full (more accurate on difficult angles and occlusions). Switching reloads the detector.", isCheckbox: true),
+        ]),
+        new("poseEstimate", "Pose Estimation", "AI / ML",
+        [
+            new("confThresh", "Confidence", 0.1, 0.9, 0.3, 0.05, "Minimum keypoint score to display. Lower values show uncertain joints; higher values show only high-confidence ones."),
+            new("thunder",    "Thunder Model", 0,   1,   0,  1,   "Use MoveNet Thunder (more accurate but slower) instead of Lightning. Switching reloads the model.", isCheckbox: true),
+        ]),
         new("cocoSsd",     "COCO-SSD",       "AI / ML",
         [
             new("confThresh", "Confidence", 0.1, 0.9, 0.35, 0.05, "Minimum score to show a detection. Lower values catch more objects but also more false positives."),
@@ -305,7 +460,119 @@
             new("scaleFactor",  "Scale Factor",  1.05, 2.0, 1.1, 0.05, "How aggressively the image is downscaled between detection passes. Lower values are more thorough but slower."),
             new("minNeighbors", "Min Neighbors", 1,    10,  3,   1,    "Minimum overlapping detections needed to confirm a face. Higher values reduce false positives."),
         ]),
+        new("faceLandmarks", "Face Landmarks", "AI / ML",
+        [
+            new("maxFaces", "Max Faces", 1, 4, 1, 1,   "Maximum number of faces to detect simultaneously. Higher values increase inference cost."),
+            new("refine",   "Refine",    0, 1, 0, 1,   "Adds iris and detailed lip contours (478 points vs 468). Enables blue iris rings. Switching reloads the model.", isCheckbox: true),
+        ]),
+        new("bodySegment", "Body Segmentation", "AI / ML",
+        [
+            new("threshold", "Threshold", 0.1, 0.9, 0.7, 0.05, "Confidence required to classify a pixel as part of a person. Lower values include more pixels but may bleed into the background."),
+            new("opacity",   "Opacity",   0.1, 1.0, 0.6, 0.05, "How strongly the body-part colors are blended over the original video. 1.0 = fully opaque color overlay."),
+        ]),
+        new("opticalFlow", "Optical Flow", "Motion",
+        [
+            new("winsize",    "Window Size", 5,   25,  15,  2,    "Averaging window size in pixels. Larger windows are more robust to noise but smooth out fine motion details."),
+            new("levels",     "Pyr. Levels", 1,   6,   3,   1,    "Number of pyramid levels. More levels detect larger motions but cost more per frame."),
+            new("pyrScale",   "Pyr. Scale",  0.1, 0.9, 0.5, 0.05, "Scale factor between pyramid levels. 0.5 = classical pyramid. Lower values give finer scale steps."),
+            new("iterations", "Iterations",  1,   8,   3,   1,    "Number of solver iterations at each pyramid level. More iterations improve accuracy at the cost of speed."),
+            new("polySigma",  "Poly Sigma",  1.1, 2.0, 1.2, 0.05, "Gaussian standard deviation for polynomial expansion. ~1.2 for 5-px neighbourhood, ~1.5 for 7-px."),
+        ]),
+        new("frameDiff", "Motion Mask", "Motion",
+        [
+            new("threshold", "Threshold",    5,  100, 25, 1,    "Pixel-change sensitivity. Lower values detect subtle motion; higher values ignore small changes and noise."),
+            new("blur",      "Pre-blur",     1,  15,  3,  2,    "Gaussian blur applied before differencing. Reduces noise and small high-frequency flicker. Must be odd."),
+            new("dilate",    "Dilation",     0,  20,  6,  1,    "Grows detected motion regions outward. Fills gaps between nearby blobs and merges fragmented detections."),
+        ]),
+        new("bgSubtract", "Background Sub.", "Motion",
+        [
+            new("history",      "History",         50,  1000, 200, 10,   "Number of frames used to build the background model. Fewer frames = faster adaptation to scene changes."),
+            new("varThreshold", "Sensitivity",      4,  64,   16,  1,    "Variance threshold for classifying a pixel as foreground. Lower values are more sensitive to change."),
+            new("shadows",      "Shadow Detection", 0,  1,    1,   1,    "When enabled, detected shadows are tinted blue rather than counted as foreground.", isCheckbox: true),
+        ]),
+        new("bgBlur", "Background Blur", "Motion",
+        [
+            new("history",     "History",     50,  500, 200, 10, "Frames used to build the background model. Fewer = faster adaptation to scene changes; more = more stable model."),
+            new("sensitivity", "Sensitivity", 4,   64,  16,  1,  "How much a pixel must differ from the background to count as foreground. Lower values are more sensitive."),
+            new("blur",        "Blur Amount", 3,   99,  21,  2,  "Gaussian blur strength applied to the background. Larger values give a stronger defocus effect. Must be odd."),
+            new("feather",     "Feather",     1,   51,  15,  2,  "Softens the foreground mask edges to blend smoothly into the blurred background. Larger = wider transition."),
+        ]),
+        new("portraitBlur", "Portrait Blur", "Motion",
+        [
+            new("blur",    "Blur Amount", 3, 99, 21, 2,  "Gaussian blur strength applied to the background. Larger values give a stronger defocus effect. Must be odd."),
+            new("feather", "Feather",     0, 20,  5, 1,  "Sigma of the Gaussian used to soften the person mask edges. 0 = hard cutout; higher values widen the blend zone."),
+        ]),
+        new("houghLines", "Hough Lines", "Edge & Feature",
+        [
+            new("threshold", "Vote Threshold", 20,  200, 80,  5,  "Minimum accumulator votes required to accept a line. Lower values detect more (and weaker) lines."),
+            new("minLength", "Min Length",     10,  300, 50,  5,  "Shortest line segment to keep, in pixels. Shorter fragments are discarded."),
+            new("maxGap",    "Max Gap",        1,   100, 10,  1,  "Maximum pixel gap between collinear segments before they are treated as separate lines."),
+        ]),
+        new("houghCircles", "Hough Circles", "Edge & Feature",
+        [
+            new("minDist",   "Min Distance",     10,  300, 50,  5,  "Minimum distance between detected circle centres. Lower values allow tightly packed circles."),
+            new("param1",    "Edge Sensitivity", 50,  300, 200, 10, "Canny high threshold used internally. Lower values make edge detection more sensitive."),
+            new("param2",    "Centre Threshold", 10,  100, 30,  5,  "Accumulator votes needed to declare a centre. Lower values detect more circles, including false positives."),
+            new("minRadius", "Min Radius",       0,   200, 0,   5,  "Smallest circle radius to consider, in pixels. 0 = no minimum."),
+            new("maxRadius", "Max Radius",       0,   400, 0,   10, "Largest circle radius to consider, in pixels. 0 = no maximum."),
+        ]),
+        new("harrisCorner", "Harris Corner", "Edge & Feature",
+        [
+            new("blockSize", "Block Size", 2,    8,    3,    1,    "Neighbourhood size for computing the covariance matrix. Larger values average over a bigger patch."),
+            new("ksize",     "Sobel Size", 3,    7,    3,    2,    "Aperture for the Sobel derivative kernel. Must be odd. Larger values capture coarser gradients."),
+            new("k",         "Harris k",   0.01, 0.1,  0.04, 0.01, "Harris sensitivity parameter. Lower values detect more corners; higher suppresses weaker responses."),
+            new("threshold", "Threshold",  50,   250,  150,  5,    "Minimum corner response (normalised 0-255) required to mark a corner."),
+        ]),
+        new("pencilSketch", "Pencil Sketch", "Stylize",
+        [
+            new("blur",   "Stroke Size", 3, 99, 21, 2,   "Controls the halo width around dark edges. Larger values produce bolder, wider pencil strokes."),
+            new("sigma",  "Softness",    0, 30, 0,  0.5, "Gaussian standard deviation for the stroke blur. 0 = auto-derived from kernel size. Higher values soften the strokes."),
+            new("invert", "Invert",      0, 1,  0,  1,   "Swaps the palette: white lines on black paper instead of dark lines on white.", isCheckbox: true),
+        ]),
+        new("pixelate", "Pixelate", "Stylize",
+        [
+            new("blockSize",  "Block Size",  2, 64, 16, 1,    "Size of each pixel block. Larger values give a coarser, more retro look."),
+            new("saturation", "Saturation",  0, 3,  1,  0.05, "Color intensity multiplier. 1 = original, above 1 boosts vibrancy, below 1 fades toward grayscale."),
+        ]),
+        new("cartoon", "Cartoon", "Stylize",
+        [
+            new("passes",     "Smooth Passes", 1,  6,   3, 1,   "Number of bilateral filter passes. More passes produce stronger flat-color regions at the cost of speed."),
+            new("sigmaColor", "Color Range",   10, 150, 75, 5,   "Bilateral color sigma. Higher values blend pixels of more different colors, smoothing broader regions."),
+            new("edgeBlock",  "Edge Block",    3,  15,  9,  2,   "Block size for adaptive edge detection. Larger values capture broader, more structural outlines."),
+            new("edgeC",      "Edge Offset",   1,  20,  7,  1,   "Threshold offset subtracted from the local mean. Higher values suppress faint edges, keeping only strong lines."),
+        ]),
     ];
+
+    // ── Algorithm tags ────────────────────────────────────────────────────────
+
+    static readonly Dictionary<string, string[]> _tags = new()
+    {
+        ["passthrough"]   = ["opencv"],
+        ["grayscale"]     = ["opencv"],
+        ["invert"]        = ["opencv"],
+        ["blur"]          = ["opencv"],
+        ["threshold"]     = ["opencv"],
+        ["canny"]         = ["opencv"],
+        ["houghLines"]    = ["opencv"],
+        ["houghCircles"]  = ["opencv"],
+        ["harrisCorner"]  = ["opencv"],
+        ["colorDetect"]   = ["opencv"],
+        ["objectDetect"]  = ["opencv"],
+        ["handTrack"]     = ["tensorflow", "mediapipe"],
+        ["poseEstimate"]  = ["tensorflow"],
+        ["cocoSsd"]       = ["tensorflow"],
+        ["faceDetect"]    = ["opencv"],
+        ["faceLandmarks"] = ["tensorflow", "mediapipe"],
+        ["bodySegment"]   = ["tensorflow"],
+        ["opticalFlow"]   = ["opencv"],
+        ["frameDiff"]     = ["opencv"],
+        ["bgSubtract"]    = ["opencv"],
+        ["bgBlur"]        = ["opencv"],
+        ["portraitBlur"]  = ["mediapipe"],
+        ["pencilSketch"]  = ["opencv"],
+        ["pixelate"]      = ["opencv"],
+        ["cartoon"]       = ["opencv"],
+    };
 
     // ── State ─────────────────────────────────────────────────────────────────
 
@@ -321,6 +588,7 @@
     string?      _openInfo       = null;
     bool         _eyedropperMode = false;
     bool         _infoOpen      = false;
+    string?      _activeTagFilter = null;
     bool         _captureMode   = false;
     bool         _isDragging    = false;
     bool         _hasTemplate   = false;
@@ -386,6 +654,9 @@
 
     void ToggleInfo(string id) => _openInfo = _openInfo == id ? null : id;
 
+    void ToggleTagFilter(string tag) =>
+        _activeTagFilter = _activeTagFilter == tag ? null : tag;
+
     async Task ToggleEyedropper()
     {
         _eyedropperMode = !_eyedropperMode;
@@ -437,6 +708,12 @@
                 System.Globalization.CultureInfo.InvariantCulture, out var val)) return;
         param.Value = val;
         await JS.InvokeVoidAsync("cvEngine.setParam", param.Id, val);
+    }
+
+    async Task OnCheckboxParamChange(AlgoParam param, ChangeEventArgs e)
+    {
+        param.Value = e.Value is true ? 1 : 0;
+        await JS.InvokeVoidAsync("cvEngine.setParam", param.Id, param.Value);
     }
 
     async Task OnMirrorChange()  => await JS.InvokeVoidAsync("cvEngine.setMirror",  _mirror);
