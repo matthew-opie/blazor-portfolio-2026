@@ -267,7 +267,8 @@ window.cvEngine = (() => {
                     // Half-extents of the ORIGINAL (unrotated) template at this scale
                     const hw = (tplGray.cols * bestScale) / 2;
                     const hh = (tplGray.rows * bestScale) / 2;
-                    const rad = bestAngle * Math.PI / 180;
+                    const drawAngle = _mirror ? -bestAngle : bestAngle;
+                    const rad = drawAngle * Math.PI / 180;
                     const cosA = Math.cos(rad), sinA = Math.sin(rad);
                     // Rotate each corner of the original template rect around the centre
                     const corners = [[-hw, -hh], [hw, -hh], [hw, hh], [-hw, hh]].map(([lx, ly]) => [
