@@ -974,6 +974,216 @@ window.cvEngine = (() => {
             };
         })(),
 
+        depthEstimate: (() => {
+            let _estimator   = null;
+            let _loading     = false;
+            let _loadError   = null;
+            let _inferring   = false;
+            let _inferCanvas = null;
+            let _outCanvas   = null;
+
+            async function tryInit() {
+                if (_estimator || _loading || typeof depthEstimation === 'undefined') return;
+                _loading = true; _loadError = null;
+                try {
+                    _estimator = await depthEstimation.createEstimator(
+                        depthEstimation.SupportedModels.ARPortraitDepth,
+                        { outputDepthRange: [0, 1] }
+                    );
+                } catch(e) {
+                    console.error('[depth]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            function turboColor(t) {
+                const stops = [
+                    [0.00, [ 30,   0, 150]],
+                    [0.25, [  0, 180, 255]],
+                    [0.50, [  0, 255,  80]],
+                    [0.75, [255, 240,   0]],
+                    [1.00, [255,  30,   0]],
+                ];
+                for (let i = 0; i < stops.length - 1; i++) {
+                    const [t0, c0] = stops[i], [t1, c1] = stops[i + 1];
+                    if (t >= t0 && t <= t1) {
+                        const f = (t - t0) / (t1 - t0);
+                        return [Math.round(c0[0] + f*(c1[0]-c0[0])),
+                                Math.round(c0[1] + f*(c1[1]-c0[1])),
+                                Math.round(c0[2] + f*(c1[2]-c0[2]))];
+                    }
+                }
+                return stops[stops.length - 1][1];
+            }
+
+            return (src, dst, p) => {
+                const blend  = p.blend  ?? 0.85;
+                const invert = Math.round(p.invert ?? 0) === 1;
+
+                src.copyTo(dst);
+
+                if (_loadError) { drawStatus(dst, `Depth: ${_loadError.slice(0, 50)}`); return; }
+                if (!_estimator) {
+                    tryInit();
+                    drawStatus(dst, _loading ? 'Loading depth model...' : 'Initializing...');
+                    return;
+                }
+
+                if (_outCanvas && _outCanvas.width > 0) {
+                    const depthMat = cv.imread(_outCanvas);
+                    const target   = new cv.Mat();
+                    try {
+                        if (depthMat.cols !== src.cols || depthMat.rows !== src.rows) {
+                            cv.resize(depthMat, target, new cv.Size(src.cols, src.rows));
+                        } else {
+                            depthMat.copyTo(target);
+                        }
+                        cv.addWeighted(src, 1 - blend, target, blend, 0, dst);
+                    } finally {
+                        depthMat.delete(); target.delete();
+                    }
+                }
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas || _inferCanvas.width !== src.cols || _inferCanvas.height !== src.rows) {
+                        _inferCanvas = document.createElement('canvas');
+                        _inferCanvas.width = src.cols; _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+
+                    _estimator.estimateDepth(_inferCanvas, { minDepth: 0, maxDepth: 1 })
+                        .then(async depthMap => {
+                            const tensor = depthMap.depthTensor;
+                            const data   = await tensor.data();
+                            const h = tensor.shape[0], w = tensor.shape[1];
+
+                            // Normalize to [0,1] across frame for maximum visual contrast
+                            let mn = Infinity, mx = -Infinity;
+                            for (let i = 0; i < data.length; i++) {
+                                if (data[i] < mn) mn = data[i];
+                                if (data[i] > mx) mx = data[i];
+                            }
+                            const range = mx - mn || 1;
+
+                            const pixels = new Uint8ClampedArray(w * h * 4);
+                            for (let i = 0; i < data.length; i++) {
+                                let t = (data[i] - mn) / range;
+                                if (invert) t = 1 - t;
+                                const [r, g, b] = turboColor(t);
+                                const j = i * 4;
+                                pixels[j] = r; pixels[j+1] = g; pixels[j+2] = b; pixels[j+3] = 255;
+                            }
+
+                            if (!_outCanvas) _outCanvas = document.createElement('canvas');
+                            _outCanvas.width = w; _outCanvas.height = h;
+                            _outCanvas.getContext('2d').putImageData(new ImageData(pixels, w, h), 0, 0);
+                            tensor.dispose();
+                        })
+                        .catch(e => console.warn('[depth]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
+        emotionDetect: (() => {
+            let _modelsLoaded = false;
+            let _loading      = false;
+            let _loadError    = null;
+            let _inferring    = false;
+            let _lastFaces    = [];
+            let _inferCanvas  = null;
+
+            const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+
+            const EMO_COLORS = {
+                happy:     [57,  255,  20],
+                surprised: [255, 230,   0],
+                neutral:   [180, 180, 180],
+                sad:       [ 80, 160, 255],
+                angry:     [255,  60,  60],
+                fearful:   [200,  80, 255],
+                disgusted: [255, 140,   0],
+            };
+
+            async function tryInit() {
+                if (_modelsLoaded || _loading || typeof faceapi === 'undefined') return;
+                _loading = true; _loadError = null;
+                try {
+                    await Promise.all([
+                        faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                        faceapi.nets.faceExpressionNet.loadFromUri(MODEL_URL),
+                    ]);
+                    _modelsLoaded = true;
+                } catch(e) {
+                    console.error('[emotion]', e);
+                    _loadError = e.message ?? String(e);
+                }
+                _loading = false;
+            }
+
+            function drawFaces(dst, faces) {
+                for (const f of faces) {
+                    const box = f.detection.box;
+                    const x = Math.round(box.x), y = Math.round(box.y);
+                    const w = Math.round(box.width), h = Math.round(box.height);
+
+                    const sorted = Object.entries(f.expressions).sort((a, b) => b[1] - a[1]);
+                    const [topEmo] = sorted[0];
+                    const [cr, cg, cb] = EMO_COLORS[topEmo] ?? [255, 255, 255];
+
+                    // Face box in top-emotion color
+                    cv.rectangle(dst, new cv.Point(x, y), new cv.Point(x + w, y + h),
+                        new cv.Scalar(cr, cg, cb, 255), 2);
+
+                    // Top 3 emotions as stacked labels below the box
+                    for (let i = 0; i < Math.min(3, sorted.length); i++) {
+                        const [emo, conf] = sorted[i];
+                        const [er, eg, eb] = EMO_COLORS[emo] ?? [200, 200, 200];
+                        const ty = y + h + 14 + i * 16;
+                        if (ty > dst.rows - 4) break;
+                        cv.putText(dst, `${emo}  ${Math.round(conf * 100)}%`,
+                            new cv.Point(x, ty),
+                            cv.FONT_HERSHEY_SIMPLEX, 0.45,
+                            new cv.Scalar(er, eg, eb, 255), 1);
+                    }
+                }
+            }
+
+            return (src, dst, p) => {
+                const confThresh = p.confThresh ?? 0.5;
+
+                src.copyTo(dst);
+
+                if (_loadError) { drawStatus(dst, `Emotion: ${_loadError.slice(0, 50)}`); return; }
+                if (!_modelsLoaded) {
+                    tryInit();
+                    drawStatus(dst, _loading ? 'Loading emotion models...' : 'Initializing...');
+                    return;
+                }
+
+                if (_inferring && _lastFaces.length === 0) drawStatus(dst, 'Running inference...');
+                if (_lastFaces.length > 0) drawFaces(dst, _lastFaces);
+
+                if (!_inferring) {
+                    _inferring = true;
+                    if (!_inferCanvas || _inferCanvas.width !== src.cols || _inferCanvas.height !== src.rows) {
+                        _inferCanvas = document.createElement('canvas');
+                        _inferCanvas.width = src.cols; _inferCanvas.height = src.rows;
+                    }
+                    cv.imshow(_inferCanvas, src);
+                    faceapi
+                        .detectAllFaces(_inferCanvas,
+                            new faceapi.TinyFaceDetectorOptions({ inputSize: 416, scoreThreshold: confThresh }))
+                        .withFaceExpressions()
+                        .then(faces => { _lastFaces = faces; })
+                        .catch(e => console.warn('[emotion]', e))
+                        .finally(() => { _inferring = false; });
+                }
+            };
+        })(),
+
         // ── Motion ────────────────────────────────────────────────────────────
 
         opticalFlow: (() => {
@@ -1460,6 +1670,154 @@ window.cvEngine = (() => {
             cv.cvtColor(cur, dst, cv.COLOR_BGR2RGBA);
             cur.delete();
         },
+
+        kaleidoscope: (() => {
+            let _autoRot  = 0;
+            let _lastTime = 0;
+
+            return (src, dst, p) => {
+                const manualRot = p.rotation ?? 0;
+                const cycle     = Math.round(p.cycle ?? 0) === 1;
+                const speed     = p.speed ?? 2;
+                const w = src.cols, h = src.rows;
+                const hw = Math.floor(w / 2), hh = Math.floor(h / 2);
+
+                let rotation;
+                const now = performance.now();
+                if (cycle) {
+                    if (_lastTime > 0) _autoRot = (_autoRot + speed * 36 * (now - _lastTime) / 1000) % 360;
+                    _lastTime = now;
+                    rotation  = _autoRot;
+                } else {
+                    _autoRot  = manualRot;
+                    _lastTime = 0;
+                    rotation  = manualRot;
+                }
+
+                let base = src, rotated = null;
+                if (Math.abs(rotation) > 0.5) {
+                    rotated = new cv.Mat();
+                    const M = cv.getRotationMatrix2D(new cv.Point(w / 2, h / 2), rotation, 1);
+                    cv.warpAffine(src, rotated, M, new cv.Size(w, h), cv.INTER_LINEAR, cv.BORDER_REFLECT);
+                    M.delete();
+                    base = rotated;
+                }
+
+                base.copyTo(dst);
+                const srcData = base.data;
+                const dstData = dst.data;
+
+                for (let r = 0; r < hh; r++) {
+                    for (let c = 0; c < hw; c++) {
+                        const si = (r * w + c) * 4;
+                        const R = srcData[si], G = srcData[si+1], B = srcData[si+2], A = srcData[si+3];
+
+                        const ti  = (r * w + (w - 1 - c)) * 4;
+                        dstData[ti] = R; dstData[ti+1] = G; dstData[ti+2] = B; dstData[ti+3] = A;
+
+                        const bli = ((h - 1 - r) * w + c) * 4;
+                        dstData[bli] = R; dstData[bli+1] = G; dstData[bli+2] = B; dstData[bli+3] = A;
+
+                        const bri = ((h - 1 - r) * w + (w - 1 - c)) * 4;
+                        dstData[bri] = R; dstData[bri+1] = G; dstData[bri+2] = B; dstData[bri+3] = A;
+                    }
+                }
+
+                if (rotated) rotated.delete();
+            };
+        })(),
+
+        asciiArt: (() => {
+            let _offCanvas = null;
+            let _offCtx    = null;
+            // Ordered lightest to densest; space = invisible, @ = maximum ink
+            const CHARS = ' .,:;i=+*#%@';
+
+            return (src, dst, p) => {
+                const cellSize = Math.max(4, Math.round(p.cellSize ?? 8));
+                const colored  = Math.round(p.colored ?? 0) === 1;
+                const w = src.cols, h = src.rows;
+                const cols = Math.floor(w / cellSize);
+                const rows = Math.floor(h / cellSize);
+
+                if (!_offCanvas || _offCanvas.width !== w || _offCanvas.height !== h) {
+                    _offCanvas        = document.createElement('canvas');
+                    _offCanvas.width  = w;
+                    _offCanvas.height = h;
+                    _offCtx = _offCanvas.getContext('2d', { willReadFrequently: true });
+                }
+
+                const srcData = src.data;
+                _offCtx.fillStyle = '#000';
+                _offCtx.fillRect(0, 0, w, h);
+                _offCtx.font         = `bold ${cellSize}px monospace`;
+                _offCtx.textBaseline = 'top';
+
+                for (let row = 0; row < rows; row++) {
+                    for (let col = 0; col < cols; col++) {
+                        // Average a small cross-sample within the cell for better accuracy
+                        let sumR = 0, sumG = 0, sumB = 0, count = 0;
+                        for (let sy = 0; sy < 3; sy++) {
+                            for (let sx = 0; sx < 3; sx++) {
+                                const px = Math.min(w - 1, col * cellSize + Math.round((sx + 0.5) * cellSize / 3));
+                                const py = Math.min(h - 1, row * cellSize + Math.round((sy + 0.5) * cellSize / 3));
+                                const idx = (py * w + px) * 4;
+                                sumR += srcData[idx]; sumG += srcData[idx+1]; sumB += srcData[idx+2];
+                                count++;
+                            }
+                        }
+                        const r = sumR / count, g = sumG / count, b = sumB / count;
+                        const lum = 0.299 * r + 0.587 * g + 0.114 * b;
+                        const ch  = CHARS[Math.min(CHARS.length - 1, Math.floor(lum / 256 * CHARS.length))];
+                        // Non-colored: phosphor green at full brightness — density creates the greyscale
+                        _offCtx.fillStyle = colored
+                            ? `rgb(${Math.round(r)},${Math.round(g)},${Math.round(b)})`
+                            : '#39ff14';
+                        _offCtx.fillText(ch, col * cellSize, row * cellSize);
+                    }
+                }
+
+                const result = cv.imread(_offCanvas);
+                result.copyTo(dst);
+                result.delete();
+            };
+        })(),
+
+        nightVision: (src, dst, p) => {
+            const amplify  = p.amplify  ?? 2.5;
+            const grainAmt = p.grain    ?? 30;
+            const vigStr   = p.vignette ?? 0.7;
+            const w = src.cols, h = src.rows;
+            const gray = new cv.Mat();
+            try {
+                cv.cvtColor(src, gray, cv.COLOR_RGBA2GRAY);
+                src.copyTo(dst);
+                const grayData = gray.data;
+                const dstData  = dst.data;
+                const cx = w / 2, cy = h / 2;
+                const maxDist2 = cx * cx + cy * cy;
+
+                for (let r = 0; r < h; r++) {
+                    for (let c = 0; c < w; c++) {
+                        const i = r * w + c;
+                        const j = i * 4;
+                        let v = Math.min(255, Math.round(grayData[i] * amplify));
+                        if (grainAmt > 0)
+                            v = Math.max(0, Math.min(255, v + Math.round((Math.random() - 0.5) * grainAmt)));
+                        const dx = c - cx, dy = r - cy;
+                        const vig = Math.max(0, 1 - vigStr * (dx * dx + dy * dy) / maxDist2);
+                        v = Math.round(v * vig);
+                        dstData[j]     = Math.round(v * 0.1);
+                        dstData[j + 1] = v;
+                        dstData[j + 2] = Math.round(v * 0.15);
+                        dstData[j + 3] = 255;
+                    }
+                }
+            } finally {
+                gray.delete();
+            }
+        },
+
     };
 
     function rotateMat(mat, deg) {

@@ -3,10 +3,10 @@
 @inject IJSRuntime JS
 @implements IAsyncDisposable
 
-<PageTitle>Comp Vision</PageTitle>
+<PageTitle>Comp Vision Playground</PageTitle>
 
 <div class="cv-page">
-    <h2 class="cv-title">Comp Vision</h2>
+    <h2 class="cv-title">Comp Vision Playground</h2>
 
     <div class="cv-layout">
 
@@ -149,6 +149,20 @@
                             <p>Inference runs asynchronously each frame so the video stays smooth. The result is a flat <code>Int32Array</code> with one index per pixel: -1 for background, 0 to 23 for body parts. The compositing loop reads this array and linearly interpolates between the original pixel color and the region color at the specified opacity. Background pixels (index -1) are left untouched, so the original video shows through wherever no person is detected.</p>
                             break;
 
+                        case "depthEstimate":
+                            <p>Estimates per-pixel depth from a single RGB image using ARPortraitDepth, a neural network trained by Apple on large portrait datasets. Because it uses a learned model rather than stereo cameras or active depth sensors, it produces a relative depth map — values represent distance ordering rather than metric distances. The output is colorized with a blue-to-red gradient where blue is near and red is far, then blended over the original video feed.</p>
+                            <p><strong>Monocular depth cues.</strong> The model infers depth from the same visual cues the human visual system uses: relative scale (smaller objects appear farther away), perspective convergence, texture gradient, and occlusion. For portrait subjects, it also leverages body priors learned during training — the model has a statistical expectation of how people look at various distances and poses, which helps it produce sharper depth boundaries around the person silhouette than a purely geometry-based approach.</p>
+                            <p><strong>Normalization.</strong> The raw output is linearly rescaled per-frame so the nearest point maps to 0 and the farthest maps to 1. This maximizes visual contrast regardless of how close or far the subject is. The Invert toggle flips the color direction if the near/far assignment feels wrong for a given scene. Blend controls how much of the colorized depth replaces the original frame — at 0.5 the depth is a translucent overlay; at 1.0 it replaces the video entirely.</p>
+                            <p>Inference runs asynchronously so the video stays smooth. As with all monocular depth methods, the output is relative and scale-ambiguous: two scenes with identical visual geometry but different absolute scales are indistinguishable to the model. It works best on portrait-oriented scenes with a clear foreground subject.</p>
+                            break;
+
+                        case "emotionDetect":
+                            <p>Detects faces and classifies each into seven emotional categories — happy, sad, angry, fearful, disgusted, surprised, and neutral — using two sequential neural networks from face-api.js, a library built on TensorFlow.js. The face detector runs first to locate bounding boxes, then the expression network runs on each cropped face patch to produce a probability distribution over the seven emotions.</p>
+                            <p><strong>Detection stage.</strong> A TinyFaceDetector network locates face bounding boxes. TinyFaceDetector is a compact single-shot network that is significantly faster than the Viola-Jones cascade used in the Face Detection algorithm, at the cost of requiring a GPU-capable runtime. It processes the full frame at a fixed input resolution (416x416 here) and outputs boxes with confidence scores.</p>
+                            <p><strong>Expression stage.</strong> The expression network is a small MobileNet-based classifier that takes an aligned and normalized face crop as input and outputs seven softmax probabilities. Because the probabilities sum to one, the model always picks a most-likely emotion even for neutral faces — high neutral probability indicates the model found no strong evidence for any of the other six states.</p>
+                            <p>The top three predicted emotions are displayed below each face box, labeled with their probability as a percentage. The face box is colored with the dominant emotion's assigned color. Inference is asynchronous and fire-and-forget: detection continues at GPU-limited frame rate while the video feed remains smooth. The confidence threshold filters detections before they are drawn — if the face detector scores a region below the threshold it is not passed to the expression network at all.</p>
+                            break;
+
                         case "cocoSsd":
                             <p>Runs MobileNet SSD via TensorFlow.js, a neural network trained on the 80-class COCO dataset. The model runs entirely in the browser using WebGL for GPU acceleration. Inference fires asynchronously so the video feed continues at full frame rate while detections update as fast as the GPU allows, typically 5-15 fps on a mid-range desktop.</p>
                             <p><strong>MobileNet backbone.</strong> MobileNet replaces the standard convolutions of a full CNN with depthwise separable convolutions. Each standard conv is split into a depthwise conv (one filter per input channel, zero cross-channel mixing) followed by a pointwise 1x1 conv (mixes channels). The depthwise step costs <code>Dk²M</code> operations and the pointwise step costs <code>DM²</code>, versus <code>Dk²M²</code> for a standard conv. For a 3x3 kernel and 512 channels this is roughly 8x fewer multiply-adds, which is what makes MobileNet fast enough to run on constrained hardware.</p>
@@ -231,6 +245,21 @@
                             <p>Smooth Passes applies the bilateral filter repeatedly. Each pass further flattens mid-frequency texture while leaving sharp transitions intact. Color Range (sigmaColor) sets how different two pixels' colors can be and still influence each other. Larger values blend more aggressively across color boundaries, producing wider flat regions at the cost of bleeding at sharp edges.</p>
                             <p>The edge layer is computed via adaptive thresholding on a median-blurred grayscale image. Adaptive thresholding computes a per-pixel threshold from a local neighborhood mean, making it robust to non-uniform lighting. Edge Block is the neighborhood size for this step; Edge Offset is the constant subtracted from the local mean to sharpen or soften what counts as an edge. The binary mask is ANDed with the smoothed color image to overlay dark outlines.</p>
                             break;
+
+                        case "kaleidoscope":
+                            <p>Takes the top-left quadrant of each frame and mirrors it horizontally, vertically, and diagonally to fill all four quadrants. The result is a perfectly tiled four-fold symmetry that updates every frame in real time. The Rotation slider feeds the frame through <code>warpAffine</code> with <code>BORDER_REFLECT</code> padding before the quadrant is extracted, which rotates the symmetry axis without introducing black corners at extreme angles.</p>
+                            <p>The mirror step is computed as a single typed-array pass over the pixel buffer. For each pixel at position <code>(r, c)</code> in the top-left quadrant, three destination coordinates are computed analytically: <code>(r, W-1-c)</code> for the horizontal mirror, <code>(H-1-r, c)</code> for the vertical mirror, and <code>(H-1-r, W-1-c)</code> for the diagonal mirror. All four channels (RGBA) are written simultaneously. This keeps the per-frame cost proportional to one quarter of the image area regardless of image content.</p>
+                            break;
+
+                        case "asciiArt":
+                            <p>Divides the frame into a grid of square cells and maps each cell to a single character from the density ramp <code>' .:-=+*#%@@'</code>. Character selection uses the ITU-R BT.601 luma formula <code>Y = 0.299R + 0.587G + 0.114B</code> on the center pixel of each cell, then linearly maps the result to one of the ten characters: space for near-black, <code>@@</code> for near-white. Cell Size controls the grid resolution. A value of 8 on a 640x480 frame produces an 80x60 character grid, similar to the resolution of a classic VT100 terminal.</p>
+                            <p>Characters are rendered onto an offscreen HTML canvas using the browser's 2D drawing API with a bold monospace font sized to match the cell grid. In Color mode each character inherits the original pixel's RGB value; in grayscale mode it uses the computed luminance. The finished canvas is read back into an OpenCV Mat via <code>cv.imread</code> and passed through the display pipeline. The offscreen canvas is cached and only reallocated when the frame resolution changes.</p>
+                            break;
+
+                        case "nightVision":
+                            <p>Converts each frame to grayscale and amplifies the luminance by the Green Amp factor, then remaps the result to a green phosphor palette: the red channel is set to 10% of the value, the blue channel to 15%, and the green channel to the full amplified value. This approximates the spectral response of a Generation 2 image intensifier tube, where the photocathode output drives a green phosphor screen rather than a color display.</p>
+                            <p>Grain adds per-pixel offsets drawn from a zero-mean uniform distribution scaled by the Grain slider, simulating the shot noise characteristic of low-light sensors. Vignette multiplies each pixel value by <code>max(0, 1 - k * d^2 / dmax^2)</code>, where <code>d</code> is the distance from the frame center and <code>dmax</code> is the corner distance. Both effects are computed in the same pixel loop as the amplification and color tinting, so the total cost is a single pass over the image regardless of how many effects are active.</p>
+                            break;
                     }
                 </div>
             </div>
@@ -300,11 +329,15 @@
                         }
                         else
                         {
+                            var _sliderDisabled = _selected.Id == "kaleidoscope"
+                                && param.Id == "speed"
+                                && (_selected.Params.FirstOrDefault(x => x.Id == "cycle")?.Value ?? 0) < 1;
                             <input type="range"
                                    min="@param.Min.ToString("0.##")"
                                    max="@param.Max.ToString("0.##")"
                                    step="@param.Step.ToString("0.##")"
                                    value="@param.Value.ToString("0.##")"
+                                   disabled="@_sliderDisabled"
                                    @oninput="e => OnParamChange(param, e)" />
                         }
                         @if (!string.IsNullOrEmpty(param.Description))
@@ -470,6 +503,15 @@
             new("threshold", "Threshold", 0.1, 0.9, 0.7, 0.05, "Confidence required to classify a pixel as part of a person. Lower values include more pixels but may bleed into the background."),
             new("opacity",   "Opacity",   0.1, 1.0, 0.6, 0.05, "How strongly the body-part colors are blended over the original video. 1.0 = fully opaque color overlay."),
         ]),
+        new("depthEstimate", "Depth Estimation", "AI / ML",
+        [
+            new("blend",  "Blend",  0.0, 1.0, 0.85, 0.05, "How strongly the depth colormap is blended over the original video. 0 = original only, 1 = depth only."),
+            new("invert", "Invert", 0,   1,   0,    1,    "Flip near and far — swap which end of the depth range maps to blue versus red.", isCheckbox: true),
+        ]),
+        new("emotionDetect", "Emotion Detection", "AI / ML",
+        [
+            new("confThresh", "Confidence", 0.1, 0.9, 0.5, 0.05, "Minimum face detection score to show a result. Lower values attempt to detect faces in more difficult poses and lighting."),
+        ]),
         new("opticalFlow", "Optical Flow", "Motion",
         [
             new("winsize",    "Window Size", 5,   25,  15,  2,    "Averaging window size in pixels. Larger windows are more robust to noise but smooth out fine motion details."),
@@ -541,6 +583,23 @@
             new("edgeBlock",  "Edge Block",    3,  15,  9,  2,   "Block size for adaptive edge detection. Larger values capture broader, more structural outlines."),
             new("edgeC",      "Edge Offset",   1,  20,  7,  1,   "Threshold offset subtracted from the local mean. Higher values suppress faint edges, keeping only strong lines."),
         ]),
+        new("kaleidoscope", "Kaleidoscope", "Stylize",
+        [
+            new("rotation", "Rotation",    0,   360, 0,   1,   "Rotates the source frame before the quadrant is extracted. Drag to change the symmetry axis."),
+            new("cycle",    "Auto-Rotate", 0,   1,   0,   1,   "Continuously rotates the symmetry axis. Set the rate with the Speed slider.", isCheckbox: true),
+            new("speed",    "Speed",       0.5, 10,  2,   0.5, "Revolutions per 10 seconds while Auto-Rotate is on."),
+        ]),
+        new("asciiArt", "ASCII Art", "Stylize",
+        [
+            new("cellSize", "Cell Size", 4, 20, 8,  1, "Size of each character cell in pixels. Smaller values give finer detail but require more draw calls per frame."),
+            new("colored",  "Color",     0, 1,  0,  1, "When on, each character is tinted with the original pixel color instead of grayscale luminance.", isCheckbox: true),
+        ]),
+        new("nightVision", "Night Vision", "Stylize",
+        [
+            new("amplify",  "Green Amp", 1.0, 5.0, 1.4, 0.1,  "Luminance amplification factor. Higher values brighten dark scenes at the cost of clipping bright areas."),
+            new("grain",    "Grain",     0,   200, 30,  1,    "Random per-pixel noise added to simulate sensor shot noise. 0 = clean; higher values give a grittier look."),
+            new("vignette", "Vignette",  0,   3.0, 0.7, 0.05, "Edge darkening strength. Higher values increase the radial falloff toward the frame corners."),
+        ]),
     ];
 
     // ── Algorithm tags ────────────────────────────────────────────────────────
@@ -564,6 +623,8 @@
         ["faceDetect"]    = ["opencv"],
         ["faceLandmarks"] = ["tensorflow", "mediapipe"],
         ["bodySegment"]   = ["tensorflow"],
+        ["depthEstimate"] = ["tensorflow"],
+        ["emotionDetect"] = ["tensorflow"],
         ["opticalFlow"]   = ["opencv"],
         ["frameDiff"]     = ["opencv"],
         ["bgSubtract"]    = ["opencv"],
@@ -572,6 +633,9 @@
         ["pencilSketch"]  = ["opencv"],
         ["pixelate"]      = ["opencv"],
         ["cartoon"]       = ["opencv"],
+        ["kaleidoscope"]  = ["opencv"],
+        ["asciiArt"]      = ["opencv"],
+        ["nightVision"]   = ["opencv"],
     };
 
     // ── State ─────────────────────────────────────────────────────────────────
