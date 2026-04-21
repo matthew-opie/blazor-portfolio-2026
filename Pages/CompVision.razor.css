@@ -105,8 +105,7 @@
 .tool-item {
     display: flex;
     flex-direction: column;
-    width: fit-content;
-    align-self: flex-start;
+    width: 100%;
     border: 1px solid transparent;
     border-radius: var(--radius-sm);
     cursor: pointer;
@@ -158,50 +157,59 @@
     padding: 0.08em 0.4em;
     border-radius: 3px;
     border: 1px solid;
-    cursor: pointer;
     line-height: 1.4;
     text-transform: lowercase;
     user-select: none;
-    transition: background 0.15s, border-color 0.15s;
 }
 
 .tag-chip[data-tag="opencv"]     { color: #4096ff; border-color: rgba(64,150,255,0.4); background: rgba(64,150,255,0.08); }
 .tag-chip[data-tag="tensorflow"] { color: #ff8a3d; border-color: rgba(255,138,61,0.4); background: rgba(255,138,61,0.08); }
 .tag-chip[data-tag="mediapipe"]  { color: #a78bfa; border-color: rgba(167,139,250,0.4); background: rgba(167,139,250,0.08); }
 
-.tag-chip[data-tag="opencv"].active     { background: rgba(64,150,255,0.2); border-color: #4096ff; }
-.tag-chip[data-tag="tensorflow"].active { background: rgba(255,138,61,0.2); border-color: #ff8a3d; }
-.tag-chip[data-tag="mediapipe"].active  { background: rgba(167,139,250,0.2); border-color: #a78bfa; }
+/* ── Tag filter strip ────────────────────────────────────────────────────── */
 
-.tag-chip:hover { opacity: 0.85; }
-
-/* ── Tag filter bar ──────────────────────────────────────────────────────── */
-
-.tag-filter-bar {
+.tag-filter-strip {
     display: flex;
-    align-items: center;
-    justify-content: space-between;
-    font-size: 0.68rem;
-    color: var(--text-dim);
-    padding: 0.2rem 0.1rem 0.25rem;
-    border-bottom: 1px solid var(--border);
-    margin-bottom: 0.1rem;
+    padding: 0.5rem 0.65rem 0.4rem;
     flex-shrink: 0;
+    border-bottom: 1px solid var(--border);
 }
 
-.tag-filter-clear {
-    background: transparent;
-    border: none;
-    color: var(--text-dim);
+.filter-btn {
+    flex: 1;
+    font-size: 0.62rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    padding: 0.3em 0;
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 0;
+    margin-left: -1px;
     cursor: pointer;
-    font-size: 0.7rem;
-    padding: 0;
-    display: flex;
-    align-items: center;
-    transition: color 0.15s;
+    line-height: 1.4;
+    font-family: inherit;
+    background: rgba(255,255,255,0.03);
+    color: var(--text-dim);
+    position: relative;
+    z-index: 0;
+    transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
-.tag-filter-clear:hover { color: var(--text); }
+.filter-btn:first-child { border-radius: 4px 0 0 4px; margin-left: 0; }
+.filter-btn:last-child  { border-radius: 0 4px 4px 0; }
+
+.filter-btn--opencv.active     { color: #4096ff; background: rgba(64,150,255,0.12);  border-color: #4096ff;  z-index: 1; }
+.filter-btn--tensorflow.active { color: #ff8a3d; background: rgba(255,138,61,0.12);  border-color: #ff8a3d;  z-index: 1; }
+.filter-btn--mediapipe.active  { color: #a78bfa; background: rgba(167,139,250,0.12); border-color: #a78bfa;  z-index: 1; }
+
+.filter-btn--opencv     { color: #4096ff; }
+.filter-btn--tensorflow { color: #ff8a3d; }
+.filter-btn--mediapipe  { color: #a78bfa; }
+
+.filter-btn.inactive {
+    color: #4e5666;
+    border-color: rgba(78,86,102,0.25);
+    background: rgba(78,86,102,0.04);
+}
 
 /* ── Main screen ─────────────────────────────────────────────────────────── */
 

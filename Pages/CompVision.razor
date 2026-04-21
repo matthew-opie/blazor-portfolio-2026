@@ -13,15 +13,14 @@
         <!-- Left: Tools -->
         <div class="cv-panel cv-tools">
             <div class="panel-label">Tools</div>
-            @if (_activeTagFilter != null)
-            {
-                <div class="tag-filter-bar">
-                    <span>@_activeTagFilter only</span>
-                    <button class="tag-filter-clear" @onclick="() => _activeTagFilter = null">
-                        <i class="fa-solid fa-xmark"></i>
-                    </button>
-                </div>
-            }
+            <div class="tag-filter-strip">
+                <button class="filter-btn filter-btn--opencv @(_activeTagFilter == "opencv" ? "active" : _activeTagFilter != null ? "inactive" : "")"
+                        @onclick='() => ToggleTagFilter("opencv")'>OpenCV</button>
+                <button class="filter-btn filter-btn--tensorflow @(_activeTagFilter == "tensorflow" ? "active" : _activeTagFilter != null ? "inactive" : "")"
+                        @onclick='() => ToggleTagFilter("tensorflow")'>TF</button>
+                <button class="filter-btn filter-btn--mediapipe @(_activeTagFilter == "mediapipe" ? "active" : _activeTagFilter != null ? "inactive" : "")"
+                        @onclick='() => ToggleTagFilter("mediapipe")'>MPipe</button>
+            </div>
             <div class="cv-tools-scroll">
             @{
                 string? _lastCategory = null;
@@ -45,11 +44,7 @@
                         <div class="tool-tags">
                             @foreach (var tag in chipTags)
                             {
-                                var t = tag;
-                                <span class="tag-chip @(_activeTagFilter == t ? "active" : "")"
-                                      data-tag="@t"
-                                      @onclick="() => ToggleTagFilter(t)"
-                                      @onclick:stopPropagation="true">@t</span>
+                                <span class="tag-chip" data-tag="@tag">@tag</span>
                             }
                         </div>
                     }
