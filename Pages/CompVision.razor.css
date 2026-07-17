@@ -226,11 +226,106 @@
     min-width: 0;
 }
 
-.cv-status {
-    position: absolute;
-    color: var(--text-muted);
-    font-size: 0.875rem;
+.cv-loader {
+    width: min(420px, calc(100% - 3rem));
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.8rem;
+    color: var(--text);
+    text-align: center;
     z-index: 1;
+}
+
+.cv-loader-icon {
+    color: var(--accent);
+    font-size: 2rem;
+    animation: cv-loader-pulse 1.8s ease-in-out infinite;
+}
+
+@keyframes cv-loader-pulse {
+    0%, 100% {
+        opacity: 0.55;
+        transform: scale(0.96);
+    }
+    50% {
+        opacity: 1;
+        transform: scale(1.04);
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .cv-loader-icon {
+        animation: none;
+    }
+}
+
+.cv-loader h3 {
+    margin: 0;
+    font-size: 1.05rem;
+}
+
+.cv-loader p {
+    min-height: 1.25rem;
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.45;
+}
+
+.cv-load-progress {
+    width: 100%;
+    height: 8px;
+    overflow: hidden;
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+.cv-load-progress span {
+    display: block;
+    height: 100%;
+    background: var(--accent);
+    border-radius: inherit;
+    transition: width 0.25s ease;
+}
+
+.cv-load-count {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-variant-numeric: tabular-nums;
+}
+
+.cv-load-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.65rem 1rem;
+    border: 1px solid var(--accent);
+    border-radius: var(--radius-sm);
+    background: var(--accent);
+    color: #fff;
+    font-family: inherit;
+    font-size: 0.82rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: filter 0.15s, transform 0.15s;
+}
+
+.cv-load-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.cv-licenses-link {
+    margin-top: 0.35rem;
+    color: var(--text-dim);
+    font-size: 0.75rem;
+    text-decoration: none;
+}
+
+.cv-licenses-link:hover {
+    color: var(--accent);
 }
 
 .cv-canvas {

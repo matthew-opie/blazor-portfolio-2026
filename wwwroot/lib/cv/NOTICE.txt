@@ -1,0 +1,106 @@
+THIRD-PARTY NOTICES — Comp Vision Playground
+============================================
+
+This directory contains redistributed open-source libraries and models used by
+the Comp Vision Playground at /cv. Full license texts are in licenses/.
+
+----------------------------------------------------------------------------
+Apache License 2.0 components
+----------------------------------------------------------------------------
+Full text: licenses/Apache-2.0.txt
+
+OpenCV.js
+  Package:  opencv.js 4.9.0 (docs.opencv.org)
+  Upstream: https://opencv.org / https://github.com/opencv/opencv
+  License:  Apache-2.0
+  Used by:  OpenCV-tagged algorithms (filters, edges, tracking, Haar face
+            detection cascade, etc.)
+
+TensorFlow.js
+  Package:  @tensorflow/tfjs@4.22.0
+  Upstream: https://github.com/tensorflow/tfjs
+  License:  Apache-2.0
+  Used by:  All TensorFlow.js model algorithms
+
+COCO-SSD
+  Package:  @tensorflow-models/coco-ssd@2.2.3
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  COCO-SSD object detection
+
+Pose Detection (MoveNet)
+  Package:  @tensorflow-models/pose-detection@2.1.3
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Pose Estimation
+
+Hand Pose Detection
+  Package:  @tensorflow-models/hand-pose-detection@2.0.1
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Hand Tracking
+
+BodyPix
+  Package:  @tensorflow-models/body-pix@2.2.0
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Body Segmentation
+
+Face Landmarks Detection
+  Package:  @tensorflow-models/face-landmarks-detection@1.0.5
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Face Landmarks
+
+Body Segmentation
+  Package:  @tensorflow-models/body-segmentation@1.0.1
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Supporting dependency for TF.js vision packages
+
+Depth Estimation (ARPortraitDepth)
+  Package:  @tensorflow-models/depth-estimation@0.0.3
+  Upstream: https://github.com/tensorflow/tfjs-models
+  License:  Apache-2.0
+  Used by:  Depth Estimation
+
+MediaPipe Selfie Segmentation
+  Package:  @mediapipe/selfie_segmentation@0.1.1675465747
+  Upstream: https://github.com/google/mediapipe
+  License:  Apache-2.0
+  Used by:  Portrait Blur
+
+Haar Cascade (haarcascade_frontalface_default.xml)
+  Upstream: OpenCV object detection data
+  License:  Apache-2.0 (OpenCV)
+  Used by:  Face Detection
+  Path:     /data/haarcascade_frontalface_default.xml
+
+----------------------------------------------------------------------------
+MIT License components
+----------------------------------------------------------------------------
+Full text: licenses/MIT.txt
+
+face-api.js
+  Package:  @vladmandic/face-api@1.7.15
+  Upstream: https://github.com/vladmandic/face-api
+  Based on: https://github.com/justadudewhohacks/face-api.js
+  License:  MIT
+  Copyright: Copyright (c) Vladimir Mandic and contributors;
+             original face-api.js Copyright (c) Vincent Mühler
+  Used by:  Emotion Detection
+  Weights:  tiny_face_detector_model, face_expression_model
+            (bundled under face-api/weights/)
+
+Note: TensorFlow model weight shards (MoveNet, COCO-SSD, BodyPix, Hand Pose,
+Face Mesh, Depth, etc.) are vendored under models/ and loaded from local URLs.
+No TF Hub / Google Storage requests are required at runtime for these algorithms.
+
+----------------------------------------------------------------------------
+Human-readable summary
+----------------------------------------------------------------------------
+These libraries are free to use, redistribute, and modify under their stated
+licenses. Apache-2.0 requires retaining copyright and license notices.
+MIT requires retaining the copyright and permission notice.
+No trademark rights are granted by these licenses.
+

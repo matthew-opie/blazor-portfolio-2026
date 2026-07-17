@@ -1,0 +1,132 @@
+@page "/cv/licenses"
+@layout FullWidthLayout
+
+<PageTitle>CV Playground — Licenses</PageTitle>
+
+<div class="cv-licenses-page">
+    <header class="cv-licenses-header">
+        <a class="cv-licenses-back" href="cv"><i class="fa-solid fa-arrow-left"></i> Back to Playground</a>
+        <h1>Third-party licenses</h1>
+        <p>
+            The Comp Vision Playground redistributes the following open-source libraries and models.
+            Full machine-readable notices live at
+            <a href="/lib/cv/NOTICE.txt" target="_blank" rel="noopener">/lib/cv/NOTICE.txt</a>.
+        </p>
+    </header>
+
+    <section class="cv-licenses-section">
+        <h2>Apache License 2.0</h2>
+        <p class="cv-licenses-meta">
+            Full text:
+            <a href="/lib/cv/licenses/Apache-2.0.txt" target="_blank" rel="noopener">Apache-2.0.txt</a>
+        </p>
+        <div class="cv-license-cards">
+            @foreach (var item in ApacheItems)
+            {
+                <article class="cv-license-card">
+                    <h3>@item.Name</h3>
+                    <p class="cv-license-pkg">@item.Package</p>
+                    <p>@item.UsedBy</p>
+                    <a href="@item.Upstream" target="_blank" rel="noopener">Upstream</a>
+                </article>
+            }
+        </div>
+    </section>
+
+    <section class="cv-licenses-section">
+        <h2>MIT License</h2>
+        <p class="cv-licenses-meta">
+            Full text:
+            <a href="/lib/cv/licenses/MIT.txt" target="_blank" rel="noopener">MIT.txt</a>
+        </p>
+        <div class="cv-license-cards">
+            @foreach (var item in MitItems)
+            {
+                <article class="cv-license-card">
+                    <h3>@item.Name</h3>
+                    <p class="cv-license-pkg">@item.Package</p>
+                    <p>@item.UsedBy</p>
+                    <a href="@item.Upstream" target="_blank" rel="noopener">Upstream</a>
+                </article>
+            }
+        </div>
+    </section>
+
+    <section class="cv-licenses-section">
+        <h2>Algorithm → library map</h2>
+        <table class="cv-license-table">
+            <thead>
+                <tr>
+                    <th>Algorithm</th>
+                    <th>Primary libraries</th>
+                    <th>License</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var row in AlgorithmMap)
+                {
+                    <tr>
+                        <td>@row.Algorithm</td>
+                        <td>@row.Libraries</td>
+                        <td>@row.License</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </section>
+</div>
+
+@code {
+    record NoticeItem(string Name, string Package, string UsedBy, string Upstream);
+    record AlgoRow(string Algorithm, string Libraries, string License);
+
+    static readonly NoticeItem[] ApacheItems =
+    [
+        new("OpenCV.js", "opencv.js 4.9.0 (docs.opencv.org)",
+            "OpenCV filters, edges, tracking, Haar face detection", "https://opencv.org"),
+        new("TensorFlow.js", "@tensorflow/tfjs@4.22.0",
+            "Runtime for all TensorFlow.js models", "https://github.com/tensorflow/tfjs"),
+        new("COCO-SSD", "@tensorflow-models/coco-ssd@2.2.3",
+            "COCO-SSD object detection", "https://github.com/tensorflow/tfjs-models"),
+        new("Pose Detection", "@tensorflow-models/pose-detection@2.1.3",
+            "MoveNet pose estimation", "https://github.com/tensorflow/tfjs-models"),
+        new("Hand Pose Detection", "@tensorflow-models/hand-pose-detection@2.0.1",
+            "Hand tracking", "https://github.com/tensorflow/tfjs-models"),
+        new("BodyPix", "@tensorflow-models/body-pix@2.2.0",
+            "Body part segmentation", "https://github.com/tensorflow/tfjs-models"),
+        new("Face Landmarks Detection", "@tensorflow-models/face-landmarks-detection@1.0.5",
+            "Face mesh landmarks", "https://github.com/tensorflow/tfjs-models"),
+        new("Body Segmentation", "@tensorflow-models/body-segmentation@1.0.1",
+            "Supporting TF.js vision dependency", "https://github.com/tensorflow/tfjs-models"),
+        new("Depth Estimation", "@tensorflow-models/depth-estimation@0.0.3",
+            "ARPortraitDepth monocular depth", "https://github.com/tensorflow/tfjs-models"),
+        new("MediaPipe Selfie Segmentation", "@mediapipe/selfie_segmentation@0.1.1675465747",
+            "Portrait blur person mask", "https://github.com/google/mediapipe"),
+        new("Haar Cascade", "haarcascade_frontalface_default.xml (OpenCV)",
+            "Classical face detection", "https://github.com/opencv/opencv"),
+    ];
+
+    static readonly NoticeItem[] MitItems =
+    [
+        new("face-api.js", "@vladmandic/face-api@1.7.15",
+            "Emotion detection (tiny face detector + expression net)", "https://github.com/vladmandic/face-api"),
+    ];
+
+    static readonly AlgoRow[] AlgorithmMap =
+    [
+        new("Passthrough, Grayscale, Invert, Blur, Threshold, Canny", "OpenCV.js", "Apache-2.0"),
+        new("Hough Lines / Circles, Harris Corner", "OpenCV.js", "Apache-2.0"),
+        new("Color Detection, Object Detection, Optical Flow", "OpenCV.js", "Apache-2.0"),
+        new("Motion Mask, Background Subtraction / Blur", "OpenCV.js", "Apache-2.0"),
+        new("Pencil Sketch, Pixelate, Cartoon, Kaleidoscope, ASCII, Night Vision", "OpenCV.js", "Apache-2.0"),
+        new("Face Detection", "OpenCV.js + Haar cascade", "Apache-2.0"),
+        new("Hand Tracking", "TensorFlow.js + hand-pose-detection", "Apache-2.0"),
+        new("Pose Estimation", "TensorFlow.js + pose-detection (MoveNet)", "Apache-2.0"),
+        new("COCO-SSD", "TensorFlow.js + coco-ssd", "Apache-2.0"),
+        new("Face Landmarks", "TensorFlow.js + face-landmarks-detection", "Apache-2.0"),
+        new("Body Segmentation", "TensorFlow.js + BodyPix", "Apache-2.0"),
+        new("Depth Estimation", "TensorFlow.js + depth-estimation", "Apache-2.0"),
+        new("Emotion Detection", "face-api.js (+ TensorFlow.js)", "MIT / Apache-2.0"),
+        new("Portrait Blur", "MediaPipe Selfie Segmentation", "Apache-2.0"),
+    ];
+}

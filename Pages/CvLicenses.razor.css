@@ -1,0 +1,123 @@
+.cv-licenses-page {
+    max-width: 960px;
+    margin: 0 auto;
+    padding: 1.5rem 1.25rem 3rem;
+    display: flex;
+    flex-direction: column;
+    gap: 2rem;
+}
+
+.cv-licenses-header h1 {
+    margin: 0.75rem 0 0.5rem;
+    font-size: 1.6rem;
+}
+
+.cv-licenses-header p {
+    margin: 0;
+    color: var(--text-muted);
+    line-height: 1.55;
+    max-width: 62ch;
+}
+
+.cv-licenses-back {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.45rem;
+    color: var(--text-muted);
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.cv-licenses-back:hover {
+    color: var(--accent);
+}
+
+.cv-licenses-section h2 {
+    margin: 0 0 0.5rem;
+    font-size: 1.1rem;
+}
+
+.cv-licenses-meta {
+    margin: 0 0 1rem;
+    color: var(--text-dim);
+    font-size: 0.82rem;
+}
+
+.cv-license-cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 0.75rem;
+}
+
+.cv-license-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 0.9rem 1rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.cv-license-card h3 {
+    margin: 0;
+    font-size: 0.95rem;
+}
+
+.cv-license-pkg {
+    margin: 0;
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    word-break: break-all;
+}
+
+.cv-license-card p {
+    margin: 0;
+    color: var(--text-muted);
+    font-size: 0.82rem;
+    line-height: 1.4;
+}
+
+.cv-license-card a {
+    font-size: 0.8rem;
+    margin-top: 0.25rem;
+}
+
+.cv-license-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.85rem;
+}
+
+.cv-license-table th,
+.cv-license-table td {
+    text-align: left;
+    padding: 0.65rem 0.75rem;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+}
+
+.cv-license-table th {
+    color: var(--text-dim);
+    font-size: 0.72rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    font-weight: 600;
+}
+
+.cv-license-table td {
+    color: var(--text-muted);
+}
+
+.cv-license-table td:first-child {
+    color: var(--text);
+    font-weight: 500;
+}
+
+@media (max-width: 640px) {
+    .cv-license-table {
+        display: block;
+        overflow-x: auto;
+    }
+}

@@ -262,9 +262,41 @@
 
         <!-- Center: Main Screen -->
         <div class="cv-main">
-            @if (_statusMsg is not null)
+            @if (!_ready)
             {
-                <div class="cv-status">@_statusMsg</div>
+                <div class="cv-loader">
+                    <i class="fa-solid fa-camera cv-loader-icon"></i>
+                    <h3>Computer Vision Playground</h3>
+                    <p>@_statusMsg</p>
+
+                    @if (!_loadFailed)
+                    {
+                        <div class="cv-load-progress"
+                             role="progressbar"
+                             aria-label="Algorithm loading progress"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             aria-valuenow="@LoadPercent">
+                            <span style="width: @(LoadPercent)%"></span>
+                        </div>
+                        <div class="cv-load-count">
+                            @if (_loadTotal > 0)
+                            {
+                                <span>@_loadCompleted / @_loadTotal &middot; </span>
+                            }
+                            @LoadPercent%
+                        </div>
+                    }
+                    else
+                    {
+                        <button class="cv-load-btn" @onclick="LoadAndStartAsync">
+                            <i class="fa-solid fa-rotate-right"></i>
+                            Retry loading
+                        </button>
+                    }
+
+                    <a class="cv-licenses-link" href="cv/licenses">Third-party licenses</a>
+                </div>
             }
             <video @ref="_videoRef" autoplay playsinline muted style="display:none"></video>
             <canvas @ref="_canvasRef"
@@ -643,7 +675,11 @@
     bool         _paused         = false;
     bool         _showFps        = false;
     bool         _ready          = false;
-    string?      _statusMsg      = "Initializing camera\u2026";
+    bool         _isLoading      = false;
+    bool         _loadFailed     = false;
+    int          _loadCompleted  = 0;
+    int          _loadTotal      = 0;
+    string?      _statusMsg      = "Preparing computer vision models\u2026";
     string?      _openInfo       = null;
     bool         _eyedropperMode = false;
     bool         _infoOpen      = false;
@@ -658,6 +694,9 @@
     int          _colorB         = 0;
 
     string ColorHex => $"#{_colorR:X2}{_colorG:X2}{_colorB:X2}";
+    int LoadPercent => _loadTotal == 0
+        ? 0
+        : (int)Math.Round(_loadCompleted * 100.0 / _loadTotal);
 
     string CaptureSelectionStyle =>
         $"left:{Math.Min(_dragOffX1,_dragOffX2):0}px;" +
@@ -667,11 +706,62 @@
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    protected override void OnAfterRender(bool firstRender)
     {
-        if (!firstRender) return;
+        // Do not await long work inside the render lifecycle — that prevents the
+        // splash UI from updating. Kick off loading on the dispatcher instead.
+        if (firstRender)
+            _ = InvokeAsync(LoadAndStartAsync);
+    }
+
+    sealed class PreloadStatusDto
+    {
+        public int Completed { get; set; }
+        public int Total { get; set; }
+        public string Message { get; set; } = "";
+        public bool Done { get; set; }
+        public string? Error { get; set; }
+    }
+
+    async Task LoadAndStartAsync()
+    {
+        if (_isLoading || _ready) return;
+
+        _isLoading     = true;
+        _loadFailed    = false;
+        _loadCompleted = 0;
+        _loadTotal     = 0;
+        _statusMsg     = "Preparing downloads\u2026";
+        await InvokeAsync(StateHasChanged);
+
         try
         {
+            // Fire-and-forget on the JS side, then poll status. Awaiting a long
+            // JS Promise from Blazor WASM while also doing interop deadlocks.
+            await JS.InvokeVoidAsync("cvEngine.startPreload");
+
+            while (true)
+            {
+                var status = await JS.InvokeAsync<PreloadStatusDto>("cvEngine.getPreloadStatus");
+                _loadCompleted = status.Completed;
+                _loadTotal     = status.Total;
+                if (!string.IsNullOrWhiteSpace(status.Message))
+                    _statusMsg = status.Message;
+                await InvokeAsync(StateHasChanged);
+
+                if (status.Done)
+                {
+                    if (!string.IsNullOrWhiteSpace(status.Error))
+                        throw new InvalidOperationException(status.Error);
+                    break;
+                }
+
+                await Task.Delay(100);
+            }
+
+            _statusMsg = "Algorithms ready. Requesting camera access\u2026";
+            await InvokeAsync(StateHasChanged);
+
             await JS.InvokeVoidAsync("cvEngine.init", _videoRef, _canvasRef);
             await JS.InvokeVoidAsync("cvEngine.setMirror", _mirror);
             _ready     = true;
@@ -679,9 +769,14 @@
         }
         catch (Exception ex)
         {
-            _statusMsg = $"Error: {ex.Message}";
+            _loadFailed = true;
+            _statusMsg  = $"Loading failed: {ex.Message}";
         }
-        StateHasChanged();
+        finally
+        {
+            _isLoading = false;
+            await InvokeAsync(StateHasChanged);
+        }
     }
 
     public async ValueTask DisposeAsync()
