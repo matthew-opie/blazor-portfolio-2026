@@ -10,9 +10,8 @@ Apache License 2.0 components
 Full text: licenses/Apache-2.0.txt
 
 OpenCV.js
-  Package:  @techstark/opencv-js@4.10.0-release.1
+  Package:  opencv.js 4.9.0 (docs.opencv.org)
   Upstream: https://opencv.org / https://github.com/opencv/opencv
-  Binding:  https://github.com/TechStark/opencv-js
   License:  Apache-2.0
   Used by:  OpenCV-tagged algorithms (filters, edges, tracking, Haar face
             detection cascade, etc.)
