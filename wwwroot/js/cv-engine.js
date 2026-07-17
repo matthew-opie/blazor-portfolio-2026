@@ -1,10 +1,44 @@
 window.cvEngine = (() => {
+    const OPEN_CV_URL       = '/lib/cv/opencv/opencv.js';
+    const OPEN_CV_SCRIPT_ID = 'opencv-js';
+    const FACE_API_WEIGHTS  = '/lib/cv/face-api/weights';
+    const MEDIAPIPE_SELFIE  = '/lib/cv/mediapipe/selfie_segmentation';
+    const MODEL_BASE        = '/lib/cv/models';
+    const LOCAL_MODELS = {
+        cocoSsd:            `${MODEL_BASE}/coco-ssd-lite-mobilenet-v2/model.json`,
+        movenetLightning:   `${MODEL_BASE}/movenet-lightning/model.json`,
+        movenetThunder:     `${MODEL_BASE}/movenet-thunder/model.json`,
+        handDetectorLite:   `${MODEL_BASE}/hand-detector-lite/model.json`,
+        handDetectorFull:   `${MODEL_BASE}/hand-detector-full/model.json`,
+        handLandmarkLite:   `${MODEL_BASE}/hand-landmark-lite/model.json`,
+        handLandmarkFull:   `${MODEL_BASE}/hand-landmark-full/model.json`,
+        faceDetectionShort: `${MODEL_BASE}/face-detection-short/model.json`,
+        faceMesh:           `${MODEL_BASE}/face-mesh/model.json`,
+        faceAttentionMesh:  `${MODEL_BASE}/face-attention-mesh/model.json`,
+        bodyPix:            `${MODEL_BASE}/bodypix-mobilenet-075-s16-q2/model.json`,
+        arPortraitDepth:    `${MODEL_BASE}/ar-portrait-depth/model.json`,
+        selfieSegGeneral:   `${MODEL_BASE}/selfie-segmentation-general/model.json`,
+    };
+    const DEPENDENCY_SCRIPTS = [
+        ['TensorFlow.js', 'tfjs', '/lib/cv/tf/tf.min.js'],
+        ['COCO-SSD library', 'coco-ssd', '/lib/cv/tf/coco-ssd.min.js'],
+        ['Pose Detection library', 'pose-detection', '/lib/cv/tf/pose-detection.min.js'],
+        ['Hand Pose library', 'hand-pose-detection', '/lib/cv/tf/hand-pose-detection.min.js'],
+        ['BodyPix library', 'body-pix', '/lib/cv/tf/body-pix.min.js'],
+        ['Body Segmentation library', 'body-segmentation', '/lib/cv/tf/body-segmentation.min.js'],
+        ['Face Landmarks library', 'face-landmarks-detection', '/lib/cv/tf/face-landmarks-detection.min.js'],
+        ['Depth Estimation library', 'depth-estimation', '/lib/cv/tf/depth-estimation.min.js'],
+        ['Face API library', 'face-api', '/lib/cv/face-api/face-api.js'],
+    ];
+
     let _video      = null;
     let _canvas     = null;
     let _tempCanvas = null;
     let _tempCtx    = null;
     let _running    = false;
     let _animId     = null;
+    let _openCvLoadPromise = null;
+    let _preloadPromise = null;
 
     let _algorithm = 'passthrough';
     let _params    = {};
@@ -22,6 +56,14 @@ window.cvEngine = (() => {
         cv.putText(dst, msg, new cv.Point(12, 36),
             cv.FONT_HERSHEY_SIMPLEX, 0.8, new cv.Scalar(57, 255, 20, 255), 2);
     }
+
+    const _preloaders = [{
+        label: 'TensorFlow runtime',
+        load: async () => {
+            if (typeof tf === 'undefined') throw new Error('TensorFlow.js failed to load');
+            await tf.ready();
+        },
+    }];
 
     const algorithms = {
 
@@ -426,7 +468,17 @@ window.cvEngine = (() => {
                 try {
                     _detector = await handPoseDetection.createDetector(
                         handPoseDetection.SupportedModels.MediaPipeHands,
-                        { runtime: 'tfjs', modelType: useLite ? 'lite' : 'full', maxHands }
+                        {
+                            runtime: 'tfjs',
+                            modelType: useLite ? 'lite' : 'full',
+                            maxHands,
+                            detectorModelUrl: useLite
+                                ? LOCAL_MODELS.handDetectorLite
+                                : LOCAL_MODELS.handDetectorFull,
+                            landmarkModelUrl: useLite
+                                ? LOCAL_MODELS.handLandmarkLite
+                                : LOCAL_MODELS.handLandmarkFull,
+                        }
                     );
                     _modelLite     = useLite;
                     _modelMaxHands = maxHands;
@@ -436,6 +488,16 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'Hand tracking models',
+                load: async () => {
+                    await tryInit(true, 2);
+                    if (!_detector) throw new Error(_loadError || 'Hand tracking Lite model failed to load');
+                    await tryInit(false, 2);
+                    if (!_detector) throw new Error(_loadError || 'Hand tracking Full model failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 src.copyTo(dst);
@@ -532,7 +594,13 @@ window.cvEngine = (() => {
                         ? poseDetection.movenet.modelType.SINGLEPOSE_THUNDER
                         : poseDetection.movenet.modelType.SINGLEPOSE_LIGHTNING;
                     _detector = await poseDetection.createDetector(
-                        poseDetection.SupportedModels.MoveNet, { modelType }
+                        poseDetection.SupportedModels.MoveNet,
+                        {
+                            modelType,
+                            modelUrl: useThunder
+                                ? LOCAL_MODELS.movenetThunder
+                                : LOCAL_MODELS.movenetLightning,
+                        }
                     );
                     _modelThunder = useThunder;
                 } catch(e) {
@@ -541,6 +609,16 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'Pose estimation models',
+                load: async () => {
+                    await tryInit(true);
+                    if (!_detector) throw new Error(_loadError || 'MoveNet Thunder failed to load');
+                    await tryInit(false);
+                    if (!_detector) throw new Error(_loadError || 'MoveNet Lightning failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 src.copyTo(dst);
@@ -608,13 +686,23 @@ window.cvEngine = (() => {
                 _loading   = true;
                 _loadError = null;
                 try {
-                    _model = await cocoSsd.load();
+                    _model = await cocoSsd.load({
+                        modelUrl: LOCAL_MODELS.cocoSsd,
+                    });
                 } catch(e) {
                     console.error('[coco-ssd]', e);
                     _loadError = e.message ?? String(e);
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'COCO-SSD model',
+                load: async () => {
+                    await tryInit();
+                    if (!_model) throw new Error(_loadError || 'COCO-SSD failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 src.copyTo(dst);
@@ -663,24 +751,37 @@ window.cvEngine = (() => {
             let _loading    = false;
             let _emaFaces   = [];
 
-            function tryInit() {
+            async function tryInit() {
                 if (_classifier || _loading) return;
                 _loading = true;
-                fetch('/data/haarcascade_frontalface_default.xml')
-                    .then(r => r.arrayBuffer())
-                    .then(buf => {
-                        try { cv.FS_unlink('face.xml'); } catch { /* first run */ }
-                        cv.FS_createDataFile('/', 'face.xml', new Uint8Array(buf), true, false, false);
-                        const c = new cv.CascadeClassifier();
-                        c.load('face.xml');
-                        _classifier = c;
-                        _loading    = false;
-                    });
+                try {
+                    const response = await fetch('/data/haarcascade_frontalface_default.xml');
+                    if (!response.ok) throw new Error(`Haar cascade download failed (${response.status})`);
+                    const buf = await response.arrayBuffer();
+                    try { cv.FS_unlink('face.xml'); } catch { /* first run */ }
+                    cv.FS_createDataFile('/', 'face.xml', new Uint8Array(buf), true, false, false);
+                    const c = new cv.CascadeClassifier();
+                    c.load('face.xml');
+                    _classifier = c;
+                } finally {
+                    _loading = false;
+                }
             }
+
+            _preloaders.push({
+                label: 'Face detection cascade',
+                load: async () => {
+                    await tryInit();
+                    if (!_classifier) throw new Error('Face detection cascade failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 src.copyTo(dst);
-                if (!_classifier) { tryInit(); return; }
+                if (!_classifier) {
+                    tryInit().catch(e => console.warn('[face-detect]', e));
+                    return;
+                }
 
                 const gray  = new cv.Mat();
                 const faces = new cv.RectVector();
@@ -783,7 +884,15 @@ window.cvEngine = (() => {
                 try {
                     _detector = await faceLandmarksDetection.createDetector(
                         faceLandmarksDetection.SupportedModels.MediaPipeFaceMesh,
-                        { runtime: 'tfjs', refineLandmarks: refine, maxFaces }
+                        {
+                            runtime: 'tfjs',
+                            refineLandmarks: refine,
+                            maxFaces,
+                            detectorModelUrl: LOCAL_MODELS.faceDetectionShort,
+                            landmarkModelUrl: refine
+                                ? LOCAL_MODELS.faceAttentionMesh
+                                : LOCAL_MODELS.faceMesh,
+                        }
                     );
                     _modelRefine   = refine;
                     _modelMaxFaces = maxFaces;
@@ -793,6 +902,16 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'Face landmark models',
+                load: async () => {
+                    await tryInit(true, 1);
+                    if (!_detector) throw new Error(_loadError || 'Refined Face Mesh failed to load');
+                    await tryInit(false, 1);
+                    if (!_detector) throw new Error(_loadError || 'Face Mesh failed to load');
+                },
+            });
 
             function drawContour(dst, kps, indices, color, closed) {
                 const scalar = new cv.Scalar(color[0], color[1], color[2], 255);
@@ -905,6 +1024,7 @@ window.cvEngine = (() => {
                         outputStride: 16,
                         multiplier: 0.75,
                         quantBytes: 2,
+                        modelUrl: LOCAL_MODELS.bodyPix,
                     });
                 } catch(e) {
                     console.error('[bodypix]', e);
@@ -912,6 +1032,14 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'Body segmentation model',
+                load: async () => {
+                    await tryInit();
+                    if (!_net) throw new Error(_loadError || 'BodyPix failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 const threshold = p.threshold ?? 0.7;
@@ -988,7 +1116,11 @@ window.cvEngine = (() => {
                 try {
                     _estimator = await depthEstimation.createEstimator(
                         depthEstimation.SupportedModels.ARPortraitDepth,
-                        { outputDepthRange: [0, 1] }
+                        {
+                            outputDepthRange: [0, 1],
+                            depthModelUrl: LOCAL_MODELS.arPortraitDepth,
+                            segmentationModelUrl: LOCAL_MODELS.selfieSegGeneral,
+                        }
                     );
                 } catch(e) {
                     console.error('[depth]', e);
@@ -996,6 +1128,14 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'Depth estimation model',
+                load: async () => {
+                    await tryInit();
+                    if (!_estimator) throw new Error(_loadError || 'Depth estimation failed to load');
+                },
+            });
 
             function turboColor(t) {
                 const stops = [
@@ -1095,7 +1235,7 @@ window.cvEngine = (() => {
             let _lastFaces    = [];
             let _inferCanvas  = null;
 
-            const MODEL_URL = 'https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights';
+            const MODEL_URL = FACE_API_WEIGHTS;
 
             const EMO_COLORS = {
                 happy:     [57,  255,  20],
@@ -1150,6 +1290,14 @@ window.cvEngine = (() => {
                     }
                 }
             }
+
+            _preloaders.push({
+                label: 'Emotion detection models',
+                load: async () => {
+                    await tryInit();
+                    if (!_modelsLoaded) throw new Error(_loadError || 'Emotion detection failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 const confThresh = p.confThresh ?? 0.5;
@@ -1455,16 +1603,14 @@ window.cvEngine = (() => {
                     if (typeof SelfieSegmentation === 'undefined') {
                         await new Promise((resolve, reject) => {
                             const s       = document.createElement('script');
-                            s.src         = 'https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js';
-                            s.crossOrigin = 'anonymous';
+                            s.src         = `${MEDIAPIPE_SELFIE}/selfie_segmentation.js`;
                             s.onload      = resolve;
                             s.onerror     = () => reject(new Error('Failed to load MediaPipe script'));
                             document.head.appendChild(s);
                         });
                     }
                     const seg = new SelfieSegmentation({
-                        locateFile: (file) =>
-                            `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
+                        locateFile: (file) => `${MEDIAPIPE_SELFIE}/${file}`
                     });
                     seg.setOptions({ modelSelection: 1 });
                     seg.onResults((results) => {
@@ -1493,6 +1639,14 @@ window.cvEngine = (() => {
                 }
                 _loading = false;
             }
+
+            _preloaders.push({
+                label: 'MediaPipe portrait model',
+                load: async () => {
+                    await tryInit();
+                    if (!_seg) throw new Error(_loadError || 'MediaPipe portrait model failed to load');
+                },
+            });
 
             return (src, dst, p) => {
                 let blurK        = Math.max(1, Math.round(p.blur ?? 21));
@@ -1878,31 +2032,163 @@ window.cvEngine = (() => {
         }
     }
 
-    async function loadOpenCV() {
-        if (window.cv?.Mat) return;
+    function withTimeout(promise, timeoutMs, message) {
+        return new Promise((resolve, reject) => {
+            const timer = setTimeout(() => reject(new Error(message)), timeoutMs);
+            Promise.resolve(promise).then(
+                value => { clearTimeout(timer); resolve(value); },
+                error => { clearTimeout(timer); reject(error); }
+            );
+        });
+    }
 
-        await new Promise((resolve, reject) => {
+    async function waitForOpenCvRuntime(timeoutMs = 30000) {
+        const deadline = Date.now() + timeoutMs;
+
+        while (Date.now() < deadline) {
+            const candidate = window.cv;
+            if (candidate?.Mat) return;
+
+            // Modern OpenCV.js builds can expose the runtime as a Promise.
+            if (candidate && typeof candidate.then === 'function') {
+                const runtime = await withTimeout(
+                    candidate,
+                    Math.max(1, deadline - Date.now()),
+                    `OpenCV.js runtime timed out after ${timeoutMs / 1000} seconds`
+                );
+
+                if (!runtime?.Mat) {
+                    throw new Error('OpenCV.js loaded, but its runtime is invalid');
+                }
+
+                window.cv = runtime;
+                return;
+            }
+
+            await new Promise(resolve => setTimeout(resolve, 50));
+        }
+
+        throw new Error(`OpenCV.js runtime timed out after ${timeoutMs / 1000} seconds`);
+    }
+
+    function injectOpenCvScript() {
+        return new Promise((resolve, reject) => {
+            const existing = document.getElementById(OPEN_CV_SCRIPT_ID);
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', () => reject(
+                    new Error(`Failed to load OpenCV.js from ${OPEN_CV_URL}`)
+                ), { once: true });
+                return;
+            }
+
             const script   = document.createElement('script');
+            script.id      = OPEN_CV_SCRIPT_ID;
             script.async   = true;
-            script.src     = 'https://docs.opencv.org/4.10.0/opencv.js';
-            script.onerror = () => reject(new Error('Failed to load OpenCV.js'));
-            script.onload  = () => {
-                const deadline = Date.now() + 30000;
-                const poll = setInterval(() => {
-                    if (window.cv?.Mat) { clearInterval(poll); resolve(); }
-                    else if (Date.now() > deadline) { clearInterval(poll); reject(new Error('OpenCV init timeout')); }
-                }, 50);
+            script.src     = OPEN_CV_URL;
+            script.onload  = resolve;
+            script.onerror = () => reject(
+                new Error(`Failed to load OpenCV.js from ${OPEN_CV_URL}`)
+            );
+            document.head.appendChild(script);
+        });
+    }
+
+    function loadDependencyScript(id, url) {
+        return new Promise((resolve, reject) => {
+            const scriptId = `cv-dependency-${id}`;
+            const existing = document.getElementById(scriptId);
+            if (existing?.dataset.ready === 'true') {
+                resolve();
+                return;
+            }
+            if (existing) {
+                existing.addEventListener('load', resolve, { once: true });
+                existing.addEventListener('error', () => reject(
+                    new Error(`Failed to load ${url}`)
+                ), { once: true });
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.id = scriptId;
+            script.src = url;
+            script.onload = () => {
+                script.dataset.ready = 'true';
+                resolve();
+            };
+            script.onerror = () => {
+                script.remove();
+                reject(new Error(`Failed to load ${url}`));
             };
             document.head.appendChild(script);
         });
     }
 
+    async function loadOpenCV() {
+        if (window.cv?.Mat) return;
+        if (_openCvLoadPromise) return _openCvLoadPromise;
+
+        _openCvLoadPromise = (async () => {
+            if (!window.cv) await injectOpenCvScript();
+            await waitForOpenCvRuntime();
+        })();
+
+        try {
+            await _openCvLoadPromise;
+        } catch (error) {
+            _openCvLoadPromise = null;
+            document.getElementById(OPEN_CV_SCRIPT_ID)?.remove();
+            if (!window.cv?.Mat) delete window.cv;
+            throw error;
+        }
+    }
+
+    async function preloadAll(progressRef = null) {
+        if (_preloadPromise) return _preloadPromise;
+
+        _preloadPromise = (async () => {
+            const tasks = [
+                { label: 'OpenCV runtime', load: loadOpenCV },
+                ...DEPENDENCY_SCRIPTS.map(([label, id, url]) => ({
+                    label,
+                    load: () => loadDependencyScript(id, url),
+                })),
+                ..._preloaders,
+            ];
+
+            for (let i = 0; i < tasks.length; i++) {
+                const task = tasks[i];
+                // Don't await .NET progress callbacks — awaiting them while C# is
+                // blocked on this Promise can deadlock Blazor WASM interop.
+                progressRef?.invokeMethodAsync(
+                    'OnPreloadProgress', i, tasks.length, `Loading ${task.label}\u2026`
+                );
+                await task.load();
+                progressRef?.invokeMethodAsync(
+                    'OnPreloadProgress', i + 1, tasks.length, `${task.label} ready`
+                );
+            }
+        })();
+
+        try {
+            await _preloadPromise;
+        } catch (error) {
+            _preloadPromise = null;
+            throw error;
+        }
+    }
+
     return {
+        preload(progressRef) {
+            return preloadAll(progressRef);
+        },
+
         async init(videoEl, canvasEl) {
             _video  = videoEl;
             _canvas = canvasEl;
 
-            await loadOpenCV();
+            await preloadAll();
 
             const stream = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
             _video.srcObject = stream;

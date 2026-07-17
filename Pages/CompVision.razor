@@ -262,9 +262,35 @@
 
         <!-- Center: Main Screen -->
         <div class="cv-main">
-            @if (_statusMsg is not null)
+            @if (!_ready)
             {
-                <div class="cv-status">@_statusMsg</div>
+                <div class="cv-loader">
+                    <i class="fa-solid fa-camera cv-loader-icon"></i>
+                    <h3>Computer Vision Playground</h3>
+                    <p>@_statusMsg</p>
+
+                    @if (_isLoading)
+                    {
+                        <div class="cv-load-progress"
+                             role="progressbar"
+                             aria-label="Algorithm loading progress"
+                             aria-valuemin="0"
+                             aria-valuemax="100"
+                             aria-valuenow="@LoadPercent">
+                            <span style="width: @(LoadPercent)%"></span>
+                        </div>
+                        <div class="cv-load-count">@_loadCompleted / @_loadTotal &middot; @LoadPercent%</div>
+                    }
+                    else
+                    {
+                        <button class="cv-load-btn" @onclick="LoadAndStartAsync">
+                            <i class="fa-solid fa-download"></i>
+                            @(_loadFailed ? "Retry loading" : "Load algorithms")
+                        </button>
+                    }
+
+                    <a class="cv-licenses-link" href="cv/licenses">Third-party licenses</a>
+                </div>
             }
             <video @ref="_videoRef" autoplay playsinline muted style="display:none"></video>
             <canvas @ref="_canvasRef"
@@ -643,7 +669,11 @@
     bool         _paused         = false;
     bool         _showFps        = false;
     bool         _ready          = false;
-    string?      _statusMsg      = "Initializing camera\u2026";
+    bool         _isLoading      = false;
+    bool         _loadFailed     = false;
+    int          _loadCompleted  = 0;
+    int          _loadTotal      = 0;
+    string?      _statusMsg      = "Download and prepare every algorithm before enabling the camera.";
     string?      _openInfo       = null;
     bool         _eyedropperMode = false;
     bool         _infoOpen      = false;
@@ -656,8 +686,12 @@
     int          _colorR         = 255;
     int          _colorG         = 0;
     int          _colorB         = 0;
+    DotNetObjectReference<CompVision>? _progressRef;
 
     string ColorHex => $"#{_colorR:X2}{_colorG:X2}{_colorB:X2}";
+    int LoadPercent => _loadTotal == 0
+        ? 0
+        : (int)Math.Round(_loadCompleted * 100.0 / _loadTotal);
 
     string CaptureSelectionStyle =>
         $"left:{Math.Min(_dragOffX1,_dragOffX2):0}px;" +
@@ -667,11 +701,34 @@
 
     // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-    protected override async Task OnAfterRenderAsync(bool firstRender)
+    [JSInvokable]
+    public async Task OnPreloadProgress(int completed, int total, string message)
     {
-        if (!firstRender) return;
+        _loadCompleted = completed;
+        _loadTotal     = total;
+        _statusMsg     = message;
+        await InvokeAsync(StateHasChanged);
+    }
+
+    async Task LoadAndStartAsync()
+    {
+        if (_isLoading) return;
+
+        _isLoading     = true;
+        _loadFailed    = false;
+        _loadCompleted = 0;
+        _loadTotal     = 0;
+        _statusMsg     = "Preparing downloads\u2026";
+        StateHasChanged();
+
         try
         {
+            _progressRef ??= DotNetObjectReference.Create(this);
+            await JS.InvokeVoidAsync("cvEngine.preload", _progressRef);
+
+            _statusMsg = "Algorithms ready. Requesting camera access\u2026";
+            StateHasChanged();
+
             await JS.InvokeVoidAsync("cvEngine.init", _videoRef, _canvasRef);
             await JS.InvokeVoidAsync("cvEngine.setMirror", _mirror);
             _ready     = true;
@@ -679,15 +736,21 @@
         }
         catch (Exception ex)
         {
-            _statusMsg = $"Error: {ex.Message}";
+            _loadFailed = true;
+            _statusMsg  = $"Loading failed: {ex.Message}";
         }
-        StateHasChanged();
+        finally
+        {
+            _isLoading = false;
+            StateHasChanged();
+        }
     }
 
     public async ValueTask DisposeAsync()
     {
         try { await JS.InvokeVoidAsync("cvEngine.stop"); }
         catch { /* component may be disposed before JS is ready */ }
+        _progressRef?.Dispose();
     }
 
     // ── Event handlers ────────────────────────────────────────────────────────

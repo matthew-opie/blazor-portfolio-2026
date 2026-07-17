@@ -1,0 +1,10 @@
+User-agent: *
+Allow: /
+
+# Large self-hosted CV / ML assets — no indexing value, high bandwidth
+Disallow: /lib/cv/
+Allow: /lib/cv/NOTICE.txt
+Allow: /lib/cv/SOURCES.txt
+Allow: /lib/cv/licenses/
+Disallow: /data/haarcascade_frontalface_default.xml
+Disallow: /documents/
