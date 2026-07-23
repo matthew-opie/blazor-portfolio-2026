@@ -1,0 +1,30 @@
+@using blazor_portfolio_2026.Models.Onboarding
+
+<div class="context-body">
+    <div class="context-badges">
+        <span class="retrieval-badge retrieval-badge--@Context.PrimaryMethod.ToString().ToLowerInvariant()">
+            @(Context.PrimaryMethod == RetrievalMethod.Bm25 ? "BM25 Hit" : "Dense Vector Hit")
+        </span>
+        @if (Context.HybridReranked)
+        {
+            <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
+        }
+        @if (Context.PageNumber > 0)
+        {
+            <span class="retrieval-badge retrieval-badge--page">page @Context.PageNumber</span>
+        }
+        <span class="retrieval-badge retrieval-badge--parent">
+            Parent Chunk size: @Context.ParentChunkTokenSize tokens
+        </span>
+        <span class="retrieval-badge retrieval-badge--score">
+            Score @Context.RelevanceScore.ToString("F2")
+        </span>
+    </div>
+    <p class="context-section">@Context.SectionTitle</p>
+    <pre class="context-text">@Context.Content</pre>
+</div>
+
+@code {
+    [Parameter, EditorRequired]
+    public RetrievedChunk Context { get; set; } = null!;
+}

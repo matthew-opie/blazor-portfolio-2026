@@ -11,6 +11,7 @@ builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
 builder.Services.AddScoped<OnboardingApiClient>();
+builder.Services.AddScoped<OnboardingStreamClient>();
 builder.Services.AddScoped<OnboardingStateService>();
 
 await builder.Build().RunAsync();

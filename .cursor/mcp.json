@@ -1,0 +1,7 @@
+{
+  "mcpServers": {
+    "onboarding-compliance": {
+      "url": "https://ug3hh2dosmw72v2vj7puwxg6g40nzsie.lambda-url.us-east-1.on.aws/mcp"
+    }
+  }
+}
