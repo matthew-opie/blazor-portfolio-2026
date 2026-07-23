@@ -2,7 +2,11 @@
 <PageTitle>mattopie.com - Résumé</PageTitle>
 <div id="resume-title">
     <h1>Matt Opie</h1>
-    <h2>Senior Software Engineer</h2>
+    <div class="contact-info">
+        Boston, MA | (850) 496-6373 |
+        <a href="mailto:matt@mattopie.com">matt@mattopie.com</a> |
+        <a href="https://linkedin.com/in/matthew-opie" target="_blank">linkedin.com/in/matthew-opie</a>
+    </div>
 </div>
 <div class="resume-body">
 <div class="resume-quotes resume-section">
@@ -23,77 +27,53 @@
 <div class="resume-section">
     <div id="resume-summary" class="resume-subsection">
         <h2>Summary</h2>
-        <div class="divider"></div>
-        <ul>
-            <li>Senior Full Stack Software Engineer — Boston, MA</li>
-            <li>7+ Years Experience</li>
-            <li>Open only to 100% remote positions</li>
-            <li>Background in Electrical Engineering</li>
-        </ul>
+        <p class="summary-text">
+            Senior Software Engineer specializing in scalable .NET/C# backends, API development, and modern cloud integrations.
+            Proven track record of owning end-to-end system architecture, driving CI/CD automation, and delivering
+            high-availability microservices. Deeply focused on system security, performance optimization, and engineering
+            robust, compliance-heavy enterprise applications.
+        </p>
     </div>
 </div>
 <div class="resume-section">
     <div id="resume-skills" class="resume-subsection">
-        <h3>Skills</h3>
-        <div class="divider"></div>
-        <div id="all-skills">
-            <div id="frontend" class="skills-columns">
-                <div class="skill-section-title">
-                    <h5>Languages</h5>
-                </div>
-                <ul>
-                    <li>C#</li>
-                    <li>TypeScript</li>
-                    <li>JavaScript</li>
-                    <li>Python</li>
-                    <li>SQL</li>
-                </ul>
+        <h2>Technical Skills</h2>
+        <ul class="skills-list">
+            <li><strong>Languages:</strong> C#, TypeScript, JavaScript, Python, SQL</li>
+            <li><strong>Frameworks &amp; Libraries:</strong> .NET 8 / .NET 10, Angular, Vue.js, jQuery, MATLAB</li>
+            <li><strong>Cloud &amp; DevOps:</strong> Azure DevOps, Azure KeyVault, CI/CD, Git, OAuth2 / Okta, AWS (Lambda, S3)</li>
+            <li><strong>Tools &amp; Platforms:</strong> Datadog, Splunk, SolarWinds, Linux, AI-Assisted Development (Cursor, Claude, ChatGPT)</li>
+            <li><strong>Specialties:</strong> Enterprise API Architecture, Microservices, Multi-Tenancy, Secure Logging, Performance Optimization</li>
+        </ul>
+    </div>
+</div>
+<div class="resume-section">
+    <div id="resume-projects" class="resume-subsection">
+        <h2>Selected Technical Projects</h2>
+        <div class="experience-row">
+            <div class="experience-header">
+                <div class="company-name">Greenfield Enterprise Insurance API Ecosystem</div>
+                <div class="dates">Confidential Client (via Infinity)</div>
             </div>
-            <div id="backend" class="skills-columns">
-                <div class="skill-section-title">
-                    <h5>Frameworks &amp; Libraries</h5>
-                </div>
+            <div class="job-title">Sole Developer &amp; Architect</div>
+            <div class="job-description">
                 <ul>
-                    <li>.NET</li>
-                    <li>Angular</li>
-                    <li>Vue.js</li>
-                    <li>jQuery</li>
-                    <li>MATLAB</li>
-                </ul>
-            </div>
-            <div id="devops" class="skills-columns">
-                <div class="skill-section-title">
-                    <h5>Cloud &amp; DevOps</h5>
-                </div>
-                <ul>
-                    <li>Azure DevOps</li>
-                    <li>CI/CD</li>
-                    <li>Git</li>
-                    <li>OAuth2 / Okta</li>
-                </ul>
-            </div>
-            <div id="tools-platforms" class="skills-columns">
-                <div class="skill-section-title">
-                    <h5>Tools &amp; Platforms</h5>
-                </div>
-                <ul>
-                    <li>Datadog</li>
-                    <li>Splunk</li>
-                    <li>SolarWinds</li>
-                    <li>Cognex In-Sight</li>
-                    <li>Linux</li>
-                </ul>
-            </div>
-            <div id="business-skills" class="skills-columns">
-                <div class="skill-section-title">
-                    <h5>Specialties</h5>
-                </div>
-                <ul>
-                    <li>API Development</li>
-                    <li>Microservices</li>
-                    <li>Machine Vision</li>
-                    <li>Machine Learning</li>
-                    <li>Performance Optimization</li>
+                    <li>
+                        Served as the sole developer and architect for a high-performance, greenfield multi-tenant enterprise API system in
+                        <strong>.NET 10</strong>, orchestrating complex insurance quoting, risk rating, document uploads, and high-volume data ingestion.
+                    </li>
+                    <li>
+                        Engineered dynamic, tenant-based client routing to securely manage complex API interactions with over two dozen internal
+                        lines-of-business services and external industry platforms, including <strong>Vertafore</strong> and <strong>Verisk</strong>.
+                    </li>
+                    <li>
+                        Designed a highly secure and observable infrastructure utilizing <strong>Azure KeyVault</strong> for centralized secrets management,
+                        comprehensive structured logging, and enterprise-level health monitoring.
+                    </li>
+                    <li>
+                        Established rigorous software quality standards from the ground up, achieving <strong>90%+ automated test coverage</strong>
+                        alongside fully automated, zero-touch CI/CD deployment pipelines.
+                    </li>
                 </ul>
             </div>
         </div>
@@ -101,147 +81,134 @@
 </div>
 <div class="resume-section">
     <div id="resume-experience" class="resume-subsection">
-        <h3>Experience</h3>
-        <div class="divider"></div>
+        <h2>Experience</h2>
         <div class="experience-row" id="infinity-div">
-            <h5 class="title">Software Engineer / Analyst</h5>
-            <div class="icon-and-dates">
-                <div class="company-text">
-                    <h6 class="company-name" id="infinity">
-                        <a href="https://www.infinity-software.com/" target="_blank">Infinity Software Development</a>
-                    </h6>
-                    <p class="dates">December 2022 - Present (@($"{Math.Round((DateTime.Today - DateTime.Parse("December 1, 2022")).Days / 365.0m, 2):f2}") years) — FL (Remote), Consulting</p>
-                </div>
+            <div class="experience-header">
+                <h6 class="company-name" id="infinity">
+                    <a href="https://www.infinity-software.com/" target="_blank">Infinity Software Development, FL (Remote) - Consulting</a>
+                </h6>
+                <p class="dates">December 2022 - Present</p>
             </div>
+            <div class="job-title">Software Engineer / Analyst</div>
             <div class="job-description">
                 <ul>
                     <li>
-                        Served as the <strong>lead consulting developer</strong> for a large-scale insurance enterprise application built using .NET/C# and Vue.js, owning end-to-end feature delivery and technical direction.
+                        Serve as the lead consulting developer for a large-scale insurance enterprise application built using .NET/C# and Vue.js,
+                        owning end-to-end feature delivery and technical direction.
                     </li>
                     <li>
-                        Served as the sole developer on the project, consistently delivering high-quality results that strengthened client trust and directly led to expanded project scope and additional engagements.
+                        Accelerated feature delivery and streamlined architectural refactoring by integrating modern AI-assisted engineering tools
+                        (Cursor, Claude Code, ChatGPT) into daily development workflows.
                     </li>
                     <li>
-                        Designed and delivered an <strong>external-facing rating submission API</strong> using .NET 8, improving integration reliability and partner onboarding.
+                        Onboarded and mentored two developers, serving as the technical lead to accelerate their domain knowledge and successfully
+                        integrate them into the project's delivery pipeline.
                     </li>
                     <li>
-                        Built and optimized <strong>Azure DevOps CI/CD pipelines</strong> and automated release workflows to support consistent, low-friction deployments.
+                        Served as the sole developer on the project for the initial phases, consistently delivering high-quality results that
+                        strengthened client trust and directly led to expanded project scope and additional engagements for the company.
                     </li>
                     <li>
-                        Led the successful <strong>userbase migration to Okta OAuth2</strong>, achieving full authentication cutover with zero downtime.
+                        Led the successful userbase migration to Okta OAuth2, achieving full authentication cutover with zero downtime.
                     </li>
                     <li>
-                        Implemented numerous UX, performance, and workflow improvements to streamline underwriter and administrator operations as a solo developer.
+                        Implemented numerous UX, performance, and workflow improvements to streamline underwriter and administrator operations,
+                        handling all enhancements as a solo developer.
                     </li>
                 </ul>
             </div>
         </div>
         <div class="experience-row" id="greenshades-div">
-            <h5 class="title">Software Developer II</h5>
-            <div class="icon-and-dates">
-                <a href="https://go.greenshades.com/" target="_blank">
-                    <img class="company-icon" src="images/icons/greenshades.jfif" alt=""/>
-                </a>
-                <div class="company-text">
+            <div class="experience-header">
+                <div class="icon-and-company">
+                    <a href="https://go.greenshades.com/" target="_blank">
+                        <img class="company-icon" src="images/icons/greenshades.jfif" alt=""/>
+                    </a>
                     <h6 class="company-name" id="greenshades">
-                        <a href="https://go.greenshades.com/" target="_blank">Greenshades Software</a>
+                        <a href="https://go.greenshades.com/" target="_blank">Greenshades Software, Jacksonville, FL (Remote)</a>
                     </h6>
-                    <p class="dates">November 2021 - December 2022 (@($"{CalculateYearsBetweenDates("November 1, 2021", "December 1, 2022")}") years) — Jacksonville, FL (Remote)</p>
                 </div>
+                <p class="dates">November 2021 - December 2022</p>
             </div>
+            <div class="job-title">Software Developer II</div>
             <div class="job-description">
                 <ul>
                     <li>
-                        Developed and delivered key features for <strong>Payroll SaaS applications</strong> using Angular, C#, and SQL within a domain-driven microservice architecture.
+                        Developed and delivered key features for Payroll SaaS applications using Angular, C#, and SQL within a domain-driven microservice architecture.
                     </li>
                     <li>
-                        Migrated legacy .NET ASPX settings pages to <strong>Angular</strong>, preserving full automation and test coverage while improving maintainability.
+                        Migrated legacy .NET ASPX settings pages to Angular, preserving full automation and test coverage while improving maintainability.
                     </li>
                     <li>
-                        Led multiple <strong>performance-improvement initiatives</strong>, using Datadog, SolarWinds, and Splunk to diagnose issues and reduce page load times by up to <strong>90%</strong>.
+                        Led multiple performance-improvement initiatives, using Datadog, SolarWinds, and Splunk to diagnose issues and reduce page load times by up to 90%.
                     </li>
                     <li>
-                        Contributed across front-end and back-end for the company's primary profit center, producing SOLID, maintainable, self-documenting features in an Agile CI/CD environment with <strong>95%+ test coverage</strong>.
+                        Contributed across front-end and back-end for the company's primary profit center, producing SOLID, maintainable, self-documenting features
+                        in an Agile CI/CD environment with 95%+ test coverage.
                     </li>
                     <li>
-                        Wrote, tested, and launched a <strong>complete retirement catch-up contribution feature</strong> used by thousands of employees across the client base.
+                        Wrote, tested, and launched a complete retirement catch-up contribution feature used by thousands of employees across the client base.
                     </li>
                 </ul>
             </div>
         </div>
         <div class="experience-row">
-            <h5 class="title">Engineer 2, Research &amp; Development</h5>
-            <div class="icon-and-dates">
-                <a href="https://www.jjvision.com/" target="_blank">
-                    <img class="company-icon" src="images/icons/jnj.jfif" alt=""/>
-                </a>
-                <div class="company-text">
+            <div class="experience-header">
+                <div class="icon-and-company">
+                    <a href="https://www.jjvision.com/" target="_blank">
+                        <img class="company-icon" src="images/icons/jnj.jfif" alt=""/>
+                    </a>
                     <h6 class="company-name" id="jnj">
-                        <a href="https://www.jjvision.com/" target="_blank">Johnson &amp; Johnson Vision</a>
+                        <a href="https://www.jjvision.com/" target="_blank">Johnson &amp; Johnson Vision, Jacksonville, FL</a>
                     </h6>
-                    <p class="dates">
-                        May 2018 - November 2021
-                        (@($"{CalculateYearsBetweenDates("May 15, 2018", "November 19, 2021")} years"))
-                    </p>
                 </div>
+                <p class="dates">May 2018 - November 2021</p>
             </div>
+            <div class="job-title">Engineer 2, R&amp;D</div>
             <div class="job-description">
                 <ul>
                     <li>
-                        Integrated multiple <strong>MVVM-based .NET/C# applications</strong> into a unified software package to streamline internal R&D workflows.
+                        Acted as the computer vision SME, developing Cognex In-Sight inspection systems and custom .NET/C# tools to support automated quality control.
                     </li>
                     <li>
-                        Performed code reviews, authored automated test suites, and executed verification procedures for clinical inspection systems used in regulated <strong>medical device environments</strong>.
+                        Built and unified multiple MVVM-based .NET applications and authored automated test suites for clinical inspection and manufacturing systems.
                     </li>
                     <li>
-                        Developed, implemented, and validated <strong>machine-vision inspection systems</strong> using Cognex In-Sight platforms to ensure high-volume product quality compliance.
+                        Developed a MATLAB machine-learning model for defect detection, improving the accuracy of sealed-lens inspection processes.
                     </li>
                     <li>
-                        Modeled, trained, and tested a <strong>MATLAB machine-learning algorithm</strong> for detecting foreign matter inside sealed contact lens packages, improving defect detection accuracy.
+                        Led cross-functional engineering efforts on multiple $80K-$600K R&amp;D initiatives, defining system requirements, validating automated equipment,
+                        and coordinating with manufacturing teams.
                     </li>
                     <li>
-                        Built and integrated a C# thin-client application for tracking injection-molding tooling, improving traceability and production visibility.
+                        Delivered electromechanical and software improvements that increased production throughput from 60k to 120k+ units per day.
                     </li>
                     <li>
-                        Held a <strong>technical leadership role</strong> managing multiple capital projects ranging from $80K to $600K, overseeing funding requests, system design, vendor coordination, and full validation.
-                    </li>
-                    <li>
-                        Implemented electromechanical and controls upgrades that increased daily production throughput from <strong>60,000 to over 120,000 units</strong>, supporting the launch of a next-generation manufacturing line.
+                        Wrote low-level PLC and driver-level control code to interface manufacturing systems with injection-molding machines, enabling synchronized real-time industrial automation.
                     </li>
                 </ul>
             </div>
         </div>
         <div class="experience-row">
-            <h5 class="title">Electrical Engineering Intern</h5>
-            <div class="icon-and-dates">
-                <a href="https://www.androsysinc.com/" target="_blank">
-                    <img class="company-icon" src="images/icons/andromeda-systems.jfif" alt=""/>
-                </a>
-                <div class="company-text">
+            <div class="experience-header">
+                <div class="icon-and-company">
+                    <a href="https://www.androsysinc.com/" target="_blank">
+                        <img class="company-icon" src="images/icons/andromeda-systems.jfif" alt=""/>
+                    </a>
                     <h6 class="company-name" id="andromeda-systems">
-                        <a href="https://www.androsysinc.com/" target="_blank">
-                            Andromeda Systems Inc.
-                        </a>
+                        <a href="https://www.androsysinc.com/" target="_blank">Andromeda Systems Inc., Orange Park, FL</a>
                     </h6>
-                    <p class="dates">
-                        May 2017 - May 2018
-                        (@($"{CalculateYearsBetweenDates("May 15, 2017", "May 15, 2018")}") years) — Orange Park, FL
-                    </p>
                 </div>
+                <p class="dates">May 2017 - May 2018</p>
             </div>
+            <div class="job-title">Electrical Engineering Intern</div>
             <div class="job-description">
                 <ul>
                     <li>
-                        Designed and built a <strong>multithreaded automated data-collection system</strong> using Python 3, Linux, Apache, MySQL, and PHP, enabling continuous high-volume telemetry capture.
+                        Built a multithreaded automated data-collection system using Python, Linux, MySQL, and Apache.
                     </li>
                     <li>
-                        Developed a <strong>REST API in Python 3</strong> to support reliable data ingestion and system interoperability.
-                    </li>
-                    <li>
-                        Built a <strong>web-based administrative console</strong> using HTML, CSS, and asynchronous JavaScript (jQuery / jQuery UI / AJAX) for system monitoring and configuration.
-                    </li>
-                    <li>
-                        Engineered schematics and hardware integration pipelines for <strong>MODBUS data collection</strong> using Raspberry Pi 3 and Raspberry Pi Zero platforms.
+                        Developed a REST API and web-based admin console (HTML/CSS/JavaScript) to support system monitoring and configuration.
                     </li>
                 </ul>
             </div>
@@ -250,76 +217,27 @@
 </div>
 <div id="resume-patents" class="resume-section">
     <div class="resume-subsection">
-        <h3>Patents &amp; Awards</h3>
-        <div class="divider"></div>
-        <div class="experience-row">
-            <div class="awards-list">
-                <div class="award-item">
-                    <h5 class="title">U.S. Patent — US20230065811A1</h5>
-                    <p>Quality control system for sealed lens packages using computer vision and MATLAB-based machine learning.</p>
-                </div>
-                <div class="award-item">
-                    <h5 class="title">J&amp;J Inspire Award — May 2020, July 2020</h5>
-                    <p>Recognized for key contributions to high-priority projects in the Medical Device division.</p>
-                </div>
-                <div class="award-item">
-                    <h5 class="title">Best Senior Capstone Project — Interdisciplinary Engineering, 2019</h5>
-                    <p>Awarded for designing and programming a fully operational automated saw system at the University of North Florida.</p>
-                </div>
-            </div>
-        </div>
+        <h2>Patents &amp; Awards</h2>
+        <ul class="awards-list">
+            <li><strong>U.S. Patent - US20230065811A1:</strong> Quality control system for sealed lens packages using computer vision and MATLAB-based machine learning.</li>
+            <li><strong>J&amp;J Inspire Award (May 2020, July 2020):</strong> Recognized for key contributions to high-priority projects in the Medical Device division.</li>
+            <li><strong>Best Senior Capstone Project (Interdisciplinary Engineering, 2019):</strong> Awarded for designing and programming a fully operational automated saw system at the University of North Florida.</li>
+        </ul>
     </div>
 </div>
 <div id="resume-education" class="resume-section">
     <div class="resume-subsection">
-        <h3>Education</h3>
-        <div class="divider"></div>
-        <div class="experience-row">
-            <h5 class="title">Bachelor of Science, Electrical Engineering (BSEE)</h5>
-            <div class="icon-and-dates">
-                <a href="https://www.unf.edu/" target="_blank">
-                    <img class="company-icon" src="images/icons/unf.jfif" alt=""/>
-                </a>
-                <div>
-                    <h6 class="company-name" id="unf">
-                        <a href="https://www.unf.edu/" target="_blank">University of North Florida</a>
-                    </h6>
-                    <p class="dates">January 2017 - May 2019 — Jacksonville, FL</p>
-                </div>
-            </div>
-            <div class="education-description">
-                <ul>
-                    <li>President of UNF IEEE Student Branch (2019)</li>
-                    <li>Vice President of UNF IEEE (2018)</li>
-                    <li>Captain and lead programmer, UNF IEEE Robotics Team (2018, 2019)</li>
-                </ul>
-            </div>
-        </div>
-        <div class="experience-row">
-            <h5 class="title">Associate of Arts (AA)</h5>
-            <div class="icon-and-dates">
-                <div>
-                    <h6 class="company-name">
-                        Northwest Florida State College
-                    </h6>
-                    <p class="dates">August 2001 - May 2004 — Niceville, FL</p>
-                </div>
-            </div>
-            <div class="education-description">
-                <ul>
-                    <li>Collegiate high school program — matriculated with AA degree.</li>
-                </ul>
-            </div>
-        </div>
+        <h2>Education</h2>
+        <ul class="education-list">
+            <li>
+                <strong>University of North Florida, Jacksonville, FL:</strong> Bachelor of Science in Electrical Engineering (BSEE) | May 2019.
+                <em>President of UNF IEEE 2019, Vice President of UNF IEEE 2018, Captain and lead programmer of UNF IEEE Robotics Team 2018, 2019.</em>
+            </li>
+            <li>
+                <strong>Northwest Florida State College, Niceville, FL:</strong> Associate of Arts (AA) | May 2004.
+                <em>Collegiate high school program - matriculated with AA degree.</em>
+            </li>
+        </ul>
     </div>
 </div>
 </div>
-
-@code {
-    private static string CalculateYearsBetweenDates(string startDate, string endDate)
-    {
-        var date1 = DateTime.Parse(startDate);
-        var date2 = DateTime.Parse(endDate);
-        return $"{(date2 - date1).TotalDays / 365.25:f2}";
-    }
-}
