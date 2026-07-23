@@ -7,21 +7,9 @@ namespace blazor_portfolio_2026.Services;
 /// <summary>
 /// HTTP client for the onboarding RAG Lambda API.
 /// </summary>
-public sealed class OnboardingApiClient
+public sealed class OnboardingApiClient(HttpClient http, IConfiguration configuration)
 {
-    private readonly HttpClient _http;
-    private readonly string _baseUrl;
-
-    public OnboardingApiClient(HttpClient http, IConfiguration configuration)
-    {
-        _http = http;
-        _baseUrl = configuration["OnboardingApi:BaseUrl"]?.Trim() ?? string.Empty;
-
-        if (IsConfigured)
-        {
-            _http.BaseAddress = new Uri(_baseUrl.TrimEnd('/') + "/");
-        }
-    }
+    private readonly string _baseUrl = ConfigureBaseUrl(http, configuration);
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_baseUrl);
 
@@ -31,7 +19,7 @@ public sealed class OnboardingApiClient
     {
         EnsureConfigured();
 
-        using var response = await _http.GetAsync("health", cancellationToken);
+        using var response = await http.GetAsync("health", cancellationToken);
         var payload = await response.Content.ReadFromJsonAsync<HealthPayload>(cancellationToken: cancellationToken);
 
         if (!response.IsSuccessStatusCode || payload is null || !payload.Success)
@@ -45,7 +33,7 @@ public sealed class OnboardingApiClient
     {
         EnsureConfigured();
 
-        using var response = await _http.GetAsync("tenants", cancellationToken);
+        using var response = await http.GetAsync("tenants", cancellationToken);
         var payload = await response.Content.ReadFromJsonAsync<TenantsPayload>(cancellationToken: cancellationToken);
 
         if (!response.IsSuccessStatusCode || payload is null || !payload.Success || payload.Tenants is null)
@@ -67,7 +55,7 @@ public sealed class OnboardingApiClient
         EnsureConfigured();
 
         var backendTenantId = ToBackendTenantId(tenantId);
-        using var response = await _http.PostAsJsonAsync(
+        using var response = await http.PostAsJsonAsync(
             $"tenants/{backendTenantId}/query",
             new QueryPayload { Query = query },
             cancellationToken);
@@ -84,6 +72,66 @@ public sealed class OnboardingApiClient
         }
 
         return MapResult(payload);
+    }
+
+    public async Task<IngestStatusSnapshot> GetIngestStatusAsync(
+        TenantId tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+
+        var backendTenantId = ToBackendTenantId(tenantId);
+        using var response = await http.GetAsync($"tenants/{backendTenantId}/ingest-status", cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync<IngestStatusPayload>(cancellationToken: cancellationToken);
+
+        if (!response.IsSuccessStatusCode || payload is null || !payload.Success)
+        {
+            throw new InvalidOperationException(
+                payload?.Error ?? $"Failed to load ingest status ({(int)response.StatusCode}).");
+        }
+
+        return new IngestStatusSnapshot(
+            payload.Status ?? "unknown",
+            payload.StartedAt,
+            payload.CompletedAt,
+            payload.PdfCount,
+            payload.ChunkCount,
+            payload.Error);
+    }
+
+    public async Task<EvalStatusSnapshot> GetEvalStatusAsync(
+        TenantId tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        EnsureConfigured();
+
+        var backendTenantId = ToBackendTenantId(tenantId);
+        using var response = await http.GetAsync($"tenants/{backendTenantId}/eval", cancellationToken);
+        var payload = await response.Content.ReadFromJsonAsync<EvalStatusPayload>(cancellationToken: cancellationToken);
+
+        if (!response.IsSuccessStatusCode || payload is null || !payload.Success)
+        {
+            throw new InvalidOperationException(
+                payload?.Error ?? $"Failed to load eval status ({(int)response.StatusCode}).");
+        }
+
+        return new EvalStatusSnapshot(
+            payload.Status ?? "unknown",
+            payload.Faithfulness,
+            payload.LastEvalRunAt,
+            payload.QuestionCount,
+            payload.Error);
+    }
+
+    private static string ConfigureBaseUrl(HttpClient http, IConfiguration configuration)
+    {
+        var baseUrl = configuration["OnboardingApi:BaseUrl"]?.Trim() ?? string.Empty;
+        if (!string.IsNullOrWhiteSpace(baseUrl))
+        {
+            http.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
+        }
+
+        return baseUrl;
     }
 
     private void EnsureConfigured()
@@ -110,17 +158,10 @@ public sealed class OnboardingApiClient
 
     private static OnboardingQueryResult MapResult(ApiResponsePayload payload)
     {
-        RetrievedChunk? context = null;
-        if (payload.Context is not null)
+        var contexts = payload.Contexts?.Select(MapContext).ToList() ?? [];
+        if (contexts.Count == 0 && payload.Context is not null)
         {
-            context = new RetrievedChunk(
-                payload.Context.DocumentId,
-                payload.Context.SectionTitle,
-                payload.Context.Content,
-                ParseRetrievalMethod(payload.Context.PrimaryMethod),
-                payload.Context.HybridReranked,
-                payload.Context.ParentChunkTokenSize,
-                payload.Context.RelevanceScore);
+            contexts = [MapContext(payload.Context)];
         }
 
         var toolLogs = payload.ToolLogs?
@@ -144,8 +185,19 @@ public sealed class OnboardingApiClient
                 payload.Telemetry.RetrievedChunks,
                 IsIdle: false);
 
-        return new OnboardingQueryResult(payload.Message, context, toolLogs, telemetry);
+        return new OnboardingQueryResult(payload.Message, contexts, toolLogs, telemetry);
     }
+
+    private static RetrievedChunk MapContext(ContextPayload context) =>
+        new(
+            context.DocumentId,
+            context.SectionTitle,
+            context.Content,
+            ParseRetrievalMethod(context.PrimaryMethod),
+            context.HybridReranked,
+            context.ParentChunkTokenSize,
+            context.RelevanceScore,
+            context.Page);
 
     private static RetrievalMethod ParseRetrievalMethod(string? value) =>
         string.Equals(value, "DenseVector", StringComparison.OrdinalIgnoreCase)
@@ -158,6 +210,51 @@ public sealed class OnboardingApiClient
         "error" => McpLogStatus.Error,
         _ => McpLogStatus.Success
     };
+
+    private sealed class EvalStatusPayload
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("faithfulness")]
+        public double? Faithfulness { get; set; }
+
+        [JsonPropertyName("lastEvalRunAt")]
+        public DateTimeOffset? LastEvalRunAt { get; set; }
+
+        [JsonPropertyName("questionCount")]
+        public int? QuestionCount { get; set; }
+
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+    }
+
+    private sealed class IngestStatusPayload
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("status")]
+        public string? Status { get; set; }
+
+        [JsonPropertyName("startedAt")]
+        public DateTimeOffset? StartedAt { get; set; }
+
+        [JsonPropertyName("completedAt")]
+        public DateTimeOffset? CompletedAt { get; set; }
+
+        [JsonPropertyName("pdfCount")]
+        public int? PdfCount { get; set; }
+
+        [JsonPropertyName("chunkCount")]
+        public int? ChunkCount { get; set; }
+
+        [JsonPropertyName("error")]
+        public string? Error { get; set; }
+    }
 
     private sealed class HealthPayload
     {
@@ -215,6 +312,9 @@ public sealed class OnboardingApiClient
         [JsonPropertyName("context")]
         public ContextPayload? Context { get; set; }
 
+        [JsonPropertyName("contexts")]
+        public List<ContextPayload>? Contexts { get; set; }
+
         [JsonPropertyName("telemetry")]
         public TelemetryPayload? Telemetry { get; set; }
     }
@@ -262,6 +362,9 @@ public sealed class OnboardingApiClient
 
         [JsonPropertyName("relevanceScore")]
         public double RelevanceScore { get; set; }
+
+        [JsonPropertyName("page")]
+        public int Page { get; set; }
     }
 
     private sealed class TelemetryPayload
@@ -288,6 +391,6 @@ public sealed class OnboardingApiClient
 
 public sealed record OnboardingQueryResult(
     string Message,
-    RetrievedChunk? Context,
+    IReadOnlyList<RetrievedChunk> Contexts,
     IReadOnlyList<McpToolLogEntry> ToolLogs,
     TelemetrySnapshot Telemetry);

@@ -1,11 +1,13 @@
+using System.Text;
 using blazor_portfolio_2026.Models.Onboarding;
+using Microsoft.JSInterop;
 
 namespace blazor_portfolio_2026.Services;
 
 /// <summary>
 /// Scoped state container for the live onboarding RAG dashboard.
 /// </summary>
-public sealed class OnboardingStateService : IDisposable
+public sealed class OnboardingStateService(OnboardingApiClient apiClient, OnboardingStreamClient streamClient) : IDisposable
 {
     private static readonly IReadOnlyList<string> SampleQueries =
     [
@@ -15,14 +17,24 @@ public sealed class OnboardingStateService : IDisposable
     ];
 
     private static readonly TelemetrySnapshot IdleTelemetry = new(0, 0, 0, 0, 0, 0, IsIdle: true);
+    private static readonly IngestStatusSnapshot UnknownIngestStatus = new("unknown", null, null, null, null, null);
+    private static readonly EvalStatusSnapshot UnknownEvalStatus = new("unknown", null, null, null, null);
 
-    private readonly OnboardingApiClient _apiClient;
     private CancellationTokenSource? _pipelineCts;
+    private DotNetObjectReference<OnboardingStreamHandler>? _streamHandlerRef;
     private bool _initialized;
+    private readonly object _streamGate = new();
+    private string _streamedText = string.Empty;
+    private IReadOnlyList<RetrievedChunk>? _streamedContexts;
+    private readonly List<McpToolLogEntry> _streamToolLogs = [];
 
     public IReadOnlyList<TenantProfile> Tenants { get; private set; } = [];
 
     public TenantProfile? ActiveTenant { get; private set; }
+
+    public IngestStatusSnapshot IngestStatus { get; private set; } = UnknownIngestStatus;
+
+    public EvalStatusSnapshot EvalStatus { get; private set; } = UnknownEvalStatus;
 
     public IReadOnlyList<ChatMessage> Messages { get; private set; } = [];
 
@@ -44,8 +56,6 @@ public sealed class OnboardingStateService : IDisposable
 
     public event Action? OnChange;
 
-    public OnboardingStateService(OnboardingApiClient apiClient) => _apiClient = apiClient;
-
     public async Task InitializeAsync(CancellationToken cancellationToken = default)
     {
         if (_initialized)
@@ -59,14 +69,14 @@ public sealed class OnboardingStateService : IDisposable
 
         try
         {
-            if (!_apiClient.IsConfigured)
+            if (!apiClient.IsConfigured)
             {
                 ConnectionError = "Set OnboardingApi:BaseUrl in wwwroot/appsettings.json.";
                 return;
             }
 
-            await _apiClient.VerifyConnectionAsync(cancellationToken);
-            Tenants = await _apiClient.GetTenantsAsync(cancellationToken);
+            await apiClient.VerifyConnectionAsync(cancellationToken);
+            Tenants = await apiClient.GetTenantsAsync(cancellationToken);
 
             if (Tenants.Count == 0)
             {
@@ -115,9 +125,71 @@ public sealed class OnboardingStateService : IDisposable
         Telemetry = IdleTelemetry;
         IsProcessing = false;
         StatusMessage = $"Tenant context reset · {tenant.DisplayId} · partition {tenant.PartitionKey} · live API";
+        IngestStatus = UnknownIngestStatus;
+        EvalStatus = UnknownEvalStatus;
+
+        Notify();
+        _ = RefreshIngestStatusAsync();
+        _ = RefreshEvalStatusAsync();
+    }
+
+    public async Task RefreshEvalStatusAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConnected || ActiveTenant is null)
+        {
+            return;
+        }
+
+        try
+        {
+            EvalStatus = await apiClient.GetEvalStatusAsync(ActiveTenant.Id, cancellationToken);
+        }
+        catch
+        {
+            EvalStatus = UnknownEvalStatus;
+        }
 
         Notify();
     }
+
+    public string FormatEvalHint()
+    {
+        if (EvalStatus.LastEvalRunAt is null || EvalStatus.Faithfulness is null)
+        {
+            return "Run POST /admin/eval to seed benchmark score";
+        }
+
+        return $"Benchmark run {EvalStatus.LastEvalRunAt.Value:MMM d, yyyy} · {EvalStatus.QuestionCount ?? 0} golden questions";
+    }
+
+    public async Task RefreshIngestStatusAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConnected || ActiveTenant is null)
+        {
+            return;
+        }
+
+        try
+        {
+            IngestStatus = await apiClient.GetIngestStatusAsync(ActiveTenant.Id, cancellationToken);
+        }
+        catch
+        {
+            IngestStatus = UnknownIngestStatus;
+        }
+
+        Notify();
+    }
+
+    public string FormatIngestBadge() => IngestStatus.Status.ToLowerInvariant() switch
+    {
+        "running" => "Indexing…",
+        "failed" => "Ingest failed",
+        "completed" when IngestStatus.PdfCount.HasValue && IngestStatus.ChunkCount.HasValue =>
+            $"Indexed · {IngestStatus.PdfCount} PDFs · {IngestStatus.ChunkCount} chunks",
+        "completed" => "Indexed",
+        _ => "Not indexed"
+    };
 
     public async Task SubmitQueryAsync(string query)
     {
@@ -134,32 +206,86 @@ public sealed class OnboardingStateService : IDisposable
             return;
         }
 
+        if (!streamClient.IsConfigured)
+        {
+            StatusMessage = "Onboarding stream client is not configured.";
+            Notify();
+            return;
+        }
+
         CancelPipeline();
         _pipelineCts = new CancellationTokenSource();
         var token = _pipelineCts.Token;
 
         IsProcessing = true;
-        StatusMessage = "Calling onboarding API…";
+        StatusMessage = "Retrieving context and invoking MCP tools…";
         ToolLogs = [];
         Telemetry = IdleTelemetry;
+        _streamedText = string.Empty;
+        _streamedContexts = null;
+        _streamToolLogs.Clear();
 
         var userMessage = new ChatMessage(ChatRole.User, trimmed);
         Messages = Messages.Concat([userMessage]).ToList();
         Notify();
 
+        var completionSource = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var responseBuilder = new StringBuilder();
+
         try
         {
-            var assistant = new ChatMessage(ChatRole.Assistant, string.Empty, IsStreaming: true);
-            Messages = Messages.Concat([assistant]).ToList();
+            Messages = Messages.Concat([new ChatMessage(ChatRole.Assistant, string.Empty, IsStreaming: true)]).ToList();
             Notify();
 
-            var result = await _apiClient.QueryAsync(ActiveTenant.Id, trimmed, token);
-            token.ThrowIfCancellationRequested();
+            _streamHandlerRef = DotNetObjectReference.Create(new OnboardingStreamHandler(
+                toolLog =>
+                {
+                    lock (_streamGate)
+                    {
+                        _streamToolLogs.Add(toolLog);
+                        ToolLogs = _streamToolLogs.ToList();
+                    }
 
-            ToolLogs = result.ToolLogs.ToList();
-            Notify();
+                    StatusMessage = $"MCP · {toolLog.ToolName}";
+                    Notify();
+                },
+                chunk =>
+                {
+                    lock (_streamGate)
+                    {
+                        responseBuilder.Append(chunk);
+                        _streamedText = responseBuilder.ToString();
+                        Messages = Messages
+                            .Take(Messages.Count - 1)
+                            .Concat([new ChatMessage(ChatRole.Assistant, _streamedText, IsStreaming: true)])
+                            .ToList();
+                    }
 
-            await StreamResponseAsync(result.Message, token);
+                    StatusMessage = "Streaming answer…";
+                    Notify();
+                },
+                contexts =>
+                {
+                    lock (_streamGate)
+                    {
+                        _streamedContexts = contexts;
+                    }
+                },
+                telemetry =>
+                {
+                    Telemetry = telemetry;
+                    Notify();
+                },
+                () => completionSource.TrySetResult(),
+                error => completionSource.TrySetException(new InvalidOperationException(error))));
+
+            await streamClient.StreamQueryAsync(
+                OnboardingApiClient.ToBackendTenantId(ActiveTenant.Id),
+                trimmed,
+                _streamHandlerRef,
+                token);
+
+            await completionSource.Task.WaitAsync(token);
             token.ThrowIfCancellationRequested();
 
             Messages = Messages
@@ -167,14 +293,13 @@ public sealed class OnboardingStateService : IDisposable
                 .Concat([
                     new ChatMessage(
                         ChatRole.Assistant,
-                        result.Message,
-                        Context: result.Context)
+                        responseBuilder.ToString(),
+                        Contexts: _streamedContexts)
                 ])
                 .ToList();
 
-            Telemetry = result.Telemetry;
             StatusMessage =
-                $"Completed · RAGAS faithfulness {result.Telemetry.RagasFaithfulness:F2} · {result.Telemetry.CrossTenantLeakPercent:F0}% cross-tenant reads";
+                $"Completed · {Telemetry.RetrievedChunks} chunk(s) retrieved · 0% cross-tenant reads";
         }
         catch (OperationCanceledException)
         {
@@ -186,6 +311,8 @@ public sealed class OnboardingStateService : IDisposable
         }
         finally
         {
+            _streamHandlerRef?.Dispose();
+            _streamHandlerRef = null;
             IsProcessing = false;
             Notify();
         }
@@ -199,7 +326,7 @@ public sealed class OnboardingStateService : IDisposable
         }
 
         var message = Messages[messageIndex];
-        if (message.Context is null)
+        if (message.Contexts is not { Count: > 0 })
         {
             return;
         }
@@ -212,31 +339,34 @@ public sealed class OnboardingStateService : IDisposable
         Notify();
     }
 
-    public void Dispose() => CancelPipeline();
-
-    private async Task StreamResponseAsync(string fullResponse, CancellationToken token)
+    public void ToggleAdditionalContextsExpanded(int messageIndex)
     {
-        var streamed = string.Empty;
-        var chunkSize = Math.Max(2, fullResponse.Length / 28);
-
-        for (var i = 0; i < fullResponse.Length; i += chunkSize)
+        if (messageIndex < 0 || messageIndex >= Messages.Count)
         {
-            token.ThrowIfCancellationRequested();
-
-            streamed += fullResponse[i..Math.Min(i + chunkSize, fullResponse.Length)];
-
-            Messages = Messages
-                .Take(Messages.Count - 1)
-                .Concat([new ChatMessage(ChatRole.Assistant, streamed, IsStreaming: true)])
-                .ToList();
-
-            Notify();
-            await Task.Delay(45, token);
+            return;
         }
+
+        var message = Messages[messageIndex];
+        if (message.Contexts is not { Count: > 1 })
+        {
+            return;
+        }
+
+        var updated = message with { AdditionalContextsExpanded = !message.AdditionalContextsExpanded };
+        Messages = Messages
+            .Select((m, i) => i == messageIndex ? updated : m)
+            .ToList();
+
+        Notify();
     }
+
+    public void Dispose() => CancelPipeline();
 
     private void CancelPipeline()
     {
+        _streamHandlerRef?.Dispose();
+        _streamHandlerRef = null;
+
         if (_pipelineCts is null)
         {
             return;

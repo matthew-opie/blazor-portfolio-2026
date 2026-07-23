@@ -136,6 +136,24 @@
     padding: 0.15rem 0.55rem;
 }
 
+.meta-chip--ingest.meta-chip--success {
+    color: #86efac;
+    border-color: rgba(134, 239, 172, 0.35);
+    background: rgba(34, 197, 94, 0.08);
+}
+
+.meta-chip--ingest.meta-chip--running {
+    color: #fcd34d;
+    border-color: rgba(252, 211, 77, 0.35);
+    background: rgba(245, 158, 11, 0.08);
+}
+
+.meta-chip--ingest.meta-chip--error {
+    color: #fca5a5;
+    border-color: rgba(252, 165, 165, 0.35);
+    background: rgba(239, 68, 68, 0.08);
+}
+
 .status-bar {
     display: flex;
     align-items: center;
@@ -331,6 +349,37 @@
     padding-top: 0.65rem;
 }
 
+.context-card--secondary {
+    margin-top: 0.5rem;
+    border-top: none;
+    padding-top: 0;
+}
+
+.context-secondary-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.35rem;
+}
+
+.context-more-toggle {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    margin-top: 0.45rem;
+    background: transparent;
+    border: none;
+    color: var(--ob-text-muted);
+    font-size: 0.74rem;
+    font-weight: 600;
+    cursor: pointer;
+    padding: 0;
+}
+
+.context-more-toggle:hover {
+    color: var(--ob-accent);
+}
+
 .context-toggle {
     width: 100%;
     display: flex;
@@ -401,7 +450,8 @@
 }
 
 .retrieval-badge--parent,
-.retrieval-badge--score {
+.retrieval-badge--score,
+.retrieval-badge--page {
     color: var(--ob-text-muted);
     background: var(--ob-surface);
 }

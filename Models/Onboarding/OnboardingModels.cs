@@ -55,7 +55,8 @@ public sealed record RetrievedChunk(
     RetrievalMethod PrimaryMethod,
     bool HybridReranked,
     int ParentChunkTokenSize,
-    double RelevanceScore);
+    double RelevanceScore,
+    int PageNumber = 0);
 
 /// <summary>One MCP tool call shown in the execution timeline.</summary>
 public sealed record McpToolLogEntry(
@@ -76,10 +77,28 @@ public sealed record TelemetrySnapshot(
     int RetrievedChunks,
     bool IsIdle);
 
+/// <summary>Latest document ingest status for a tenant.</summary>
+public sealed record IngestStatusSnapshot(
+    string Status,
+    DateTimeOffset? StartedAt,
+    DateTimeOffset? CompletedAt,
+    int? PdfCount,
+    int? ChunkCount,
+    string? Error);
+
+/// <summary>Cached RAGAS benchmark result for a tenant.</summary>
+public sealed record EvalStatusSnapshot(
+    string Status,
+    double? Faithfulness,
+    DateTimeOffset? LastEvalRunAt,
+    int? QuestionCount,
+    string? Error);
+
 /// <summary>A chat bubble in the query interface.</summary>
 public sealed record ChatMessage(
     ChatRole Role,
     string Content,
     bool IsStreaming = false,
-    RetrievedChunk? Context = null,
-    bool ContextExpanded = false);
+    IReadOnlyList<RetrievedChunk>? Contexts = null,
+    bool ContextExpanded = false,
+    bool AdditionalContextsExpanded = false);

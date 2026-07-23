@@ -29,6 +29,7 @@
             @if (State.ActiveTenant is not null)
             {
                 <div class="tenant-meta">
+                    <span class="meta-chip meta-chip--ingest @GetIngestBadgeClass()">@State.FormatIngestBadge()</span>
                     <span class="meta-chip">PK: @State.ActiveTenant.PartitionKey</span>
                     <span class="meta-chip">@State.ActiveTenant.VectorCollection</span>
                 </div>
@@ -83,40 +84,57 @@
                             }
                         </div>
 
-                        @if (message.Context is not null && !message.IsStreaming)
+                        @if (message.Contexts is { Count: > 0 } && !message.IsStreaming)
                         {
+                            var primaryContext = message.Contexts[0];
+                            var additionalContexts = message.Contexts.Skip(1).ToList();
+
                             <div class="context-card">
                                 <button type="button"
                                         class="context-toggle"
                                         @onclick="() => State.ToggleContextExpanded(index)">
                                     <i class="fa-solid @(message.ContextExpanded ? "fa-chevron-up" : "fa-chevron-down")"></i>
-                                    Retrieved Context
-                                    <span class="context-doc">@message.Context.DocumentId</span>
+                                    Retrieved Context@if (primaryContext.PageNumber > 0)
+                                    {
+                                        <text> · page @primaryContext.PageNumber</text>
+                                    }
+                                    <span class="context-doc">@primaryContext.DocumentId</span>
                                 </button>
 
                                 @if (message.ContextExpanded)
                                 {
-                                    <div class="context-body">
-                                        <div class="context-badges">
-                                            <span class="retrieval-badge retrieval-badge--@message.Context.PrimaryMethod.ToString().ToLowerInvariant()">
-                                                @(message.Context.PrimaryMethod == RetrievalMethod.Bm25 ? "BM25 Hit" : "Dense Vector Hit")
-                                            </span>
-                                            @if (message.Context.HybridReranked)
-                                            {
-                                                <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
-                                            }
-                                            <span class="retrieval-badge retrieval-badge--parent">
-                                                Parent Chunk size: @message.Context.ParentChunkTokenSize tokens
-                                            </span>
-                                            <span class="retrieval-badge retrieval-badge--score">
-                                                Score @message.Context.RelevanceScore.ToString("F2")
-                                            </span>
-                                        </div>
-                                        <p class="context-section">@message.Context.SectionTitle</p>
-                                        <pre class="context-text">@message.Context.Content</pre>
-                                    </div>
+                                    <RetrievedContextBody Context="primaryContext" />
                                 }
                             </div>
+
+                            @if (additionalContexts.Count > 0)
+                            {
+                                <button type="button"
+                                        class="context-more-toggle"
+                                        @onclick="() => State.ToggleAdditionalContextsExpanded(index)">
+                                    <i class="fa-solid @(message.AdditionalContextsExpanded ? "fa-chevron-up" : "fa-chevron-down")"></i>
+                                    @(message.AdditionalContextsExpanded
+                                        ? "Hide additional sources"
+                                        : $"{additionalContexts.Count} more source{(additionalContexts.Count == 1 ? "" : "s")}")
+                                </button>
+
+                                @if (message.AdditionalContextsExpanded)
+                                {
+                                    @foreach (var context in additionalContexts)
+                                    {
+                                        <div class="context-card context-card--secondary">
+                                            <div class="context-secondary-header">
+                                                <span class="context-doc">@context.DocumentId</span>
+                                                @if (context.PageNumber > 0)
+                                                {
+                                                    <span class="retrieval-badge retrieval-badge--page">page @context.PageNumber</span>
+                                                }
+                                            </div>
+                                            <RetrievedContextBody Context="context" />
+                                        </div>
+                                    }
+                                }
+                            }
                         }
                     </div>
                 }
@@ -221,8 +239,8 @@
                     </div>
                     <div class="metric-card metric-card--highlight">
                         <span class="metric-label">RAGAS Faithfulness Score</span>
-                        <span class="metric-value">@FormatScore(State.Telemetry.RagasFaithfulness)</span>
-                        <span class="metric-hint">Python benchmark pipeline</span>
+                        <span class="metric-value">@FormatScore(State.EvalStatus.Faithfulness)</span>
+                        <span class="metric-hint">@State.FormatEvalHint()</span>
                     </div>
                     <div class="metric-card metric-card--success">
                         <span class="metric-label">Cross-Tenant Data Leaks</span>
@@ -298,8 +316,16 @@
     private static string FormatLatency(double ms) =>
         ms <= 0 ? "—" : $"< {Math.Max(1, (int)Math.Ceiling(ms))}ms";
 
-    private static string FormatScore(double score) =>
-        score <= 0 ? "—" : score.ToString("F2");
+    private static string FormatScore(double? score) =>
+        score is null or <= 0 ? "—" : score.Value.ToString("F2");
+
+    private string GetIngestBadgeClass() => State.IngestStatus.Status.ToLowerInvariant() switch
+    {
+        "running" => "meta-chip--running",
+        "failed" => "meta-chip--error",
+        "completed" => "meta-chip--success",
+        _ => string.Empty
+    };
 
     public void Dispose()
     {
