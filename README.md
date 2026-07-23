@@ -78,7 +78,7 @@ The onboarding dashboard requires a configured Lambda Function URL. Set it in [`
 
 On load, the dashboard calls `GET /health` and `GET /tenants`, then routes queries to `POST /tenants/{id}/query`. If the API is unreachable or `BaseUrl` is empty, the UI shows a connection error instead of falling back to mock data.
 
-The Lambda backend lives in a separate repo: [`clientonboardinglambda`](https://github.com/matthew-opie/clientonboardinglambda) (not included in this repository).
+The Lambda backend lives in a separate repo: [`ClientOnboardingLambda`](https://github.com/matthew-opie/ClientOnboardingLambda) (not included in this repository).
 
 ### Adding Typing Test Passages
 
