@@ -8,6 +8,42 @@
 <div class="project-container card">
     <div class="project-title">
         <div>
+            <a class="project-link" href="/onboarding">
+                <h4>Multi-Tenant Institutional AI Onboarding Platform</h4>
+            </a>
+        </div>
+    </div>
+
+    <div class="project-description">
+        <p>A live dashboard demo of a multi-tenant compliance onboarding system built for institutional investors.</p>
+        <p>
+            The production backend runs on .NET 10 and AWS Serverless with a single-table DynamoDB schema, Qdrant vector search,
+            and a hybrid RAG pipeline combining BM25 with dense embeddings and parent-child chunking. The agent layer uses the
+            Model Context Protocol (MCP) to invoke compliance tools before synthesizing answers, with a Python RAGAS suite
+            benchmarking faithfulness on every interaction. The demo UI enforces strict tenant isolation — switching partitions
+            resets chat, tool logs, and telemetry to prove zero cross-tenant leakage.
+        </p>
+    </div>
+    <div class="project-tags">
+        <div class="tags-label">
+            <p>Technologies used:</p>
+            <ul class="tag-group">
+                <li class="tag">.NET 10</li>
+                <li class="tag">AWS Lambda</li>
+                <li class="tag">DynamoDB</li>
+                <li class="tag">Qdrant</li>
+                <li class="tag">Hybrid RAG</li>
+                <li class="tag">MCP</li>
+                <li class="tag">RAGAS</li>
+                <li class="tag">Blazor WASM</li>
+            </ul>
+        </div>
+    </div>
+</div>
+
+<div class="project-container card">
+    <div class="project-title">
+        <div>
             <a class="project-link" href="/" target="_blank">
                 <h4>mattopie.com</h4>
             </a><a class="git-link" href="https://www.github.com/matthew-opie/blazor-portfolio-2026/" target="_blank"><i class="fa-brands fa-github"></i>Github</a>

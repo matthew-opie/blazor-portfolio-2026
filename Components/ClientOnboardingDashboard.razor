@@ -1,0 +1,308 @@
+@using blazor_portfolio_2026.Models.Onboarding
+@inject OnboardingStateService State
+@implements IDisposable
+
+<div class="onboarding-dashboard">
+    <header class="dashboard-header">
+        <div class="dashboard-title-block">
+            <p class="dashboard-eyebrow">Multi-Tenant Institutional AI Onboarding</p>
+            <h2 class="dashboard-title">Hybrid RAG Compliance Console</h2>
+            <p class="dashboard-subtitle">
+                .NET 10 · AWS Serverless · DynamoDB Single-Table · Qdrant · MCP · RAGAS
+            </p>
+        </div>
+
+        <div class="tenant-switcher">
+            <label class="tenant-label" for="tenant-select">
+                <i class="fa-solid fa-shield-halved"></i> Active Tenant
+            </label>
+            <select id="tenant-select"
+                    class="tenant-select"
+                    @bind="_selectedTenantId"
+                    @bind:after="OnTenantSwitched"
+                    disabled="@(!State.IsConnected || State.IsProcessing)">
+                @foreach (var tenant in State.Tenants)
+                {
+                    <option value="@tenant.Id">@tenant.DisplayId — @tenant.InstitutionType</option>
+                }
+            </select>
+            @if (State.ActiveTenant is not null)
+            {
+                <div class="tenant-meta">
+                    <span class="meta-chip">PK: @State.ActiveTenant.PartitionKey</span>
+                    <span class="meta-chip">@State.ActiveTenant.VectorCollection</span>
+                </div>
+            }
+        </div>
+    </header>
+
+    @if (State.IsInitializing)
+    {
+        <div class="status-bar status-bar--active">
+            <span class="status-pulse"></span>
+            <span>Connecting to onboarding API…</span>
+        </div>
+    }
+    else if (!State.IsConnected)
+    {
+        <div class="status-bar status-bar--error">
+            <span>Unable to connect to onboarding API. @State.ConnectionError</span>
+        </div>
+    }
+    else if (!string.IsNullOrWhiteSpace(State.StatusMessage))
+    {
+        <div class="status-bar @(State.IsProcessing ? "status-bar--active" : "")">
+            @if (State.IsProcessing)
+            {
+                <span class="status-pulse"></span>
+            }
+            <span>@State.StatusMessage</span>
+        </div>
+    }
+
+    <div class="dashboard-grid">
+        <section class="panel panel-chat">
+            <div class="panel-header">
+                <span class="panel-title"><i class="fa-solid fa-comments"></i> RAG Query Interface</span>
+                <span class="panel-badge">Hybrid BM25 + Dense</span>
+            </div>
+
+            <div class="chat-transcript" @ref="_transcriptRef">
+                @for (var i = 0; i < State.Messages.Count; i++)
+                {
+                    var index = i;
+                    var message = State.Messages[index];
+
+                    <div class="chat-bubble chat-bubble--@message.Role.ToString().ToLowerInvariant()">
+                        <div class="chat-role">@FormatRole(message.Role)</div>
+                        <div class="chat-content">
+                            @message.Content
+                            @if (message.IsStreaming)
+                            {
+                                <span class="stream-cursor"></span>
+                            }
+                        </div>
+
+                        @if (message.Context is not null && !message.IsStreaming)
+                        {
+                            <div class="context-card">
+                                <button type="button"
+                                        class="context-toggle"
+                                        @onclick="() => State.ToggleContextExpanded(index)">
+                                    <i class="fa-solid @(message.ContextExpanded ? "fa-chevron-up" : "fa-chevron-down")"></i>
+                                    Retrieved Context
+                                    <span class="context-doc">@message.Context.DocumentId</span>
+                                </button>
+
+                                @if (message.ContextExpanded)
+                                {
+                                    <div class="context-body">
+                                        <div class="context-badges">
+                                            <span class="retrieval-badge retrieval-badge--@message.Context.PrimaryMethod.ToString().ToLowerInvariant()">
+                                                @(message.Context.PrimaryMethod == RetrievalMethod.Bm25 ? "BM25 Hit" : "Dense Vector Hit")
+                                            </span>
+                                            @if (message.Context.HybridReranked)
+                                            {
+                                                <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
+                                            }
+                                            <span class="retrieval-badge retrieval-badge--parent">
+                                                Parent Chunk size: @message.Context.ParentChunkTokenSize tokens
+                                            </span>
+                                            <span class="retrieval-badge retrieval-badge--score">
+                                                Score @message.Context.RelevanceScore.ToString("F2")
+                                            </span>
+                                        </div>
+                                        <p class="context-section">@message.Context.SectionTitle</p>
+                                        <pre class="context-text">@message.Context.Content</pre>
+                                    </div>
+                                }
+                            </div>
+                        }
+                    </div>
+                }
+            </div>
+
+            <div class="sample-queries">
+                <span class="sample-label">Demo queries</span>
+                <div class="sample-chips">
+                    @foreach (var sample in State.SuggestedQueries)
+                    {
+                        <button type="button"
+                                class="sample-chip"
+                                disabled="@(!State.IsConnected || State.IsProcessing)"
+                                @onclick="() => UseSampleQuery(sample)">
+                            @sample
+                        </button>
+                    }
+                </div>
+            </div>
+
+            <form class="chat-input-row" @onsubmit="SubmitQuery" @onsubmit:preventDefault="true">
+                <input class="chat-input"
+                       placeholder="Ask about IPS limits, restrictions, or policy…"
+                       @bind="_queryText"
+                       @bind:event="oninput"
+                       disabled="@(!State.IsConnected || State.IsProcessing)" />
+                <button type="submit"
+                        class="chat-submit"
+                        disabled="@(!State.IsConnected || State.IsProcessing || string.IsNullOrWhiteSpace(_queryText))">
+                    @if (State.IsProcessing)
+                    {
+                        <i class="fa-solid fa-spinner fa-spin"></i>
+                    }
+                    else
+                    {
+                        <i class="fa-solid fa-paper-plane"></i>
+                    }
+                    <span>Query</span>
+                </button>
+            </form>
+        </section>
+
+        <div class="dashboard-right">
+            <section class="panel panel-mcp">
+                <div class="panel-header">
+                    <span class="panel-title"><i class="fa-solid fa-terminal"></i> MCP Tool Execution Log</span>
+                    <span class="panel-badge panel-badge--terminal">Model Context Protocol</span>
+                </div>
+
+                <div class="mcp-log">
+                    @if (State.ToolLogs.Count == 0)
+                    {
+                        <div class="mcp-empty">
+                            <i class="fa-solid fa-microchip"></i>
+                            <p>Awaiting query — agent will invoke compliance tools before synthesis.</p>
+                        </div>
+                    }
+                    else
+                    {
+                        @foreach (var entry in State.ToolLogs)
+                        {
+                            <div class="mcp-entry mcp-entry--@entry.Status.ToString().ToLowerInvariant()">
+                                <div class="mcp-entry-header">
+                                    <span class="mcp-time">@entry.Timestamp.LocalDateTime.ToString("HH:mm:ss.fff")</span>
+                                    <span class="mcp-status mcp-status--@entry.Status.ToString().ToLowerInvariant()">
+                                        @entry.Status
+                                    </span>
+                                    <span class="mcp-duration">@entry.DurationMs ms</span>
+                                </div>
+                                <div class="mcp-tool-line">
+                                    <span class="mcp-prompt">&gt;</span>
+                                    <code>@entry.ToolName</code><span class="mcp-args">(@entry.Parameters)</span>
+                                </div>
+                                <pre class="mcp-output">@entry.Output</pre>
+                            </div>
+                        }
+                    }
+                </div>
+            </section>
+
+            <section class="panel panel-telemetry">
+                <div class="panel-header">
+                    <span class="panel-title"><i class="fa-solid fa-chart-line"></i> Benchmarking &amp; Telemetry</span>
+                    <span class="panel-badge">RAGAS Suite</span>
+                </div>
+
+                <div class="telemetry-grid">
+                    <div class="metric-card">
+                        <span class="metric-label">Vector Search p95 Latency</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.VectorSearchP95Ms)</span>
+                        <span class="metric-hint">Qdrant HNSW · parent-child fetch</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">DynamoDB Context Assembly</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.DynamoDbAssemblyMs)</span>
+                        <span class="metric-hint">Single-table PK/SK query</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Hybrid Rerank</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.HybridRerankMs)</span>
+                        <span class="metric-hint">BM25 + dense fusion</span>
+                    </div>
+                    <div class="metric-card metric-card--highlight">
+                        <span class="metric-label">RAGAS Faithfulness Score</span>
+                        <span class="metric-value">@FormatScore(State.Telemetry.RagasFaithfulness)</span>
+                        <span class="metric-hint">Python benchmark pipeline</span>
+                    </div>
+                    <div class="metric-card metric-card--success">
+                        <span class="metric-label">Cross-Tenant Data Leaks</span>
+                        <span class="metric-value">@State.Telemetry.CrossTenantLeakPercent.ToString("F0")%</span>
+                        <span class="metric-hint">Partition guard enforced</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Retrieved Chunks</span>
+                        <span class="metric-value">@State.Telemetry.RetrievedChunks</span>
+                        <span class="metric-hint">Post-rerank context window</span>
+                    </div>
+                </div>
+            </section>
+        </div>
+    </div>
+</div>
+
+@code {
+    private string _queryText = string.Empty;
+    private ElementReference _transcriptRef;
+    private TenantId _selectedTenantId = TenantId.Tenant001;
+
+    protected override async Task OnInitializedAsync()
+    {
+        State.OnChange += HandleStateChanged;
+        await State.InitializeAsync();
+        _selectedTenantId = State.ActiveTenant?.Id ?? TenantId.Tenant001;
+    }
+
+    private void HandleStateChanged()
+    {
+        if (State.ActiveTenant is not null)
+        {
+            _selectedTenantId = State.ActiveTenant.Id;
+        }
+
+        InvokeAsync(StateHasChanged);
+    }
+
+    private void OnTenantSwitched()
+    {
+        if (State.ActiveTenant is null || _selectedTenantId == State.ActiveTenant.Id)
+        {
+            return;
+        }
+
+        _queryText = string.Empty;
+        State.SwitchTenant(_selectedTenantId);
+    }
+
+    private async Task SubmitQuery()
+    {
+        var query = _queryText;
+        _queryText = string.Empty;
+        await State.SubmitQueryAsync(query);
+    }
+
+    private async Task UseSampleQuery(string sample)
+    {
+        _queryText = sample;
+        await State.SubmitQueryAsync(sample);
+        _queryText = string.Empty;
+    }
+
+    private static string FormatRole(ChatRole role) => role switch
+    {
+        ChatRole.System => "System",
+        ChatRole.User => "Analyst",
+        ChatRole.Assistant => "Compliance Agent",
+        _ => role.ToString()
+    };
+
+    private static string FormatLatency(double ms) =>
+        ms <= 0 ? "—" : $"< {Math.Max(1, (int)Math.Ceiling(ms))}ms";
+
+    private static string FormatScore(double score) =>
+        score <= 0 ? "—" : score.ToString("F2");
+
+    public void Dispose()
+    {
+        State.OnChange -= HandleStateChanged;
+    }
+}
