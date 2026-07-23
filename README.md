@@ -58,7 +58,7 @@ cd blazor-portfolio-2026
 dotnet run
 ```
 
-The app will be available at `http://localhost:5000` by default, or specify a port:
+The app will be available at `http://localhost:5000` by default. If Kestrel binds another port (e.g. `5156`), that origin must be listed on the Lambda Function URL CORS config — or pin a known port:
 
 ```bash
 dotnet run --urls http://localhost:5201

@@ -136,4 +136,4 @@ fields @timestamp, @message
 
 **Stages logged on query:** `request_received` → `retrieval` → `mcp_tools` → `openai_synthesis` → `query_complete` → `request_complete`
 
-**CORS** (Function URL): `https://mattopie.com`, `https://www.mattopie.com`, `http://localhost:5201`, `http://localhost:5000`
+**CORS** (Function URL): `https://mattopie.com`, `https://www.mattopie.com`, `http://localhost:5000`, `http://localhost:5201`, `http://localhost:5156`
