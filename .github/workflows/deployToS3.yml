@@ -25,6 +25,9 @@ jobs:
     - name: dotnet publish
       run: dotnet publish -c Release -o ${{env.DOTNET_ROOT}}/blazorapp
 
+    - name: Generate SPA route fallbacks
+      run: bash scripts/generate-spa-fallbacks.sh ${{env.DOTNET_ROOT}}/blazorapp/wwwroot
+
     - name: Publish artifacts
       uses: actions/upload-artifact@master
       with:
@@ -42,6 +45,17 @@ jobs:
       uses: actions/download-artifact@main
       with:
         name: blazorStaticSite
+
+    - name: Upload bare SPA route keys to S3
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        INDEX="wwwroot/index.html"
+        for route in portfolio onboarding resume cv markdown typing pomodoro weather counter cv/licenses; do
+          aws s3 cp "$INDEX" "s3://www.mattopie.com/$route" --acl public-read --content-type text/html
+        done
  
     - name: Deploy to S3 🚀
       uses: jakejarvis/s3-sync-action@master
