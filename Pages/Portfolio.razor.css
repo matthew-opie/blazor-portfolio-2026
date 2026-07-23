@@ -55,6 +55,25 @@
     color: var(--accent);
 }
 
+.project-demo-link {
+    display: inline-flex;
+    align-items: center;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--accent);
+    text-decoration: none;
+    padding: 0.35rem 0.75rem;
+    border: 1px solid rgba(59, 130, 246, 0.35);
+    border-radius: 999px;
+    background: var(--accent-dim);
+    transition: background 0.2s, color 0.2s;
+}
+
+.project-demo-link:hover {
+    color: #fff;
+    background: var(--accent);
+}
+
 .project-image {
     width: 100%;
     max-height: 220px;
