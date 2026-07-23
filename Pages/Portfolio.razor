@@ -12,17 +12,20 @@
                 <h4>Multi-Tenant Institutional AI Onboarding Platform</h4>
             </a>
             <a class="project-demo-link" href="/onboarding">Launch AI Onboarding Demo →</a>
+            <a class="git-link" href="https://github.com/matthew-opie/ClientOnboardingLambda" target="_blank"><i class="fa-brands fa-github"></i> API</a>
+            <a class="git-link" href="https://github.com/matthew-opie/McpComplianceServer" target="_blank"><i class="fa-brands fa-github"></i> MCP</a>
         </div>
     </div>
 
     <div class="project-description">
         <p>A live dashboard demo of a multi-tenant compliance onboarding system built for institutional investors.</p>
         <p>
-            The production backend runs on .NET 10 and AWS Serverless with a single-table DynamoDB schema, Qdrant vector search,
-            and a hybrid RAG pipeline combining BM25 with dense embeddings and parent-child chunking. The agent layer uses the
-            Model Context Protocol (MCP) to invoke compliance tools before synthesizing answers, with a Python RAGAS suite
-            benchmarking faithfulness on every interaction. The demo UI enforces strict tenant isolation — switching partitions
-            resets chat, tool logs, and telemetry to prove zero cross-tenant leakage.
+            The production backend runs on .NET 10 and AWS Serverless: a query Lambda with response streaming, an async
+            ingest worker (S3 → SQS), a standalone MCP compliance server over Streamable HTTP, and a Blazor WASM dashboard.
+            Hybrid RAG combines BM25 keyword search with Qdrant dense embeddings via reciprocal rank fusion, returning
+            multi-chunk context with PDF page citations. Compliance tools run through the real MCP wire protocol before
+            OpenAI synthesis; tokens stream live over SSE. RAGAS faithfulness scores are cached from one-time golden evals.
+            The UI enforces strict tenant isolation — switching partitions resets chat, tool logs, and telemetry.
         </p>
     </div>
     <div class="project-tags">
@@ -34,7 +37,9 @@
                 <li class="tag">DynamoDB</li>
                 <li class="tag">Qdrant</li>
                 <li class="tag">Hybrid RAG</li>
-                <li class="tag">MCP</li>
+                <li class="tag">SSE Streaming</li>
+                <li class="tag">SQS Ingest</li>
+                <li class="tag">MCP Wire Protocol</li>
                 <li class="tag">RAGAS</li>
                 <li class="tag">Blazor WASM</li>
             </ul>

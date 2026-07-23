@@ -11,11 +11,11 @@ Built on .NET 10 Blazor WebAssembly. Deployed automatically to AWS S3 on every p
 ## Projects
 
 ### [AI Onboarding Demo](https://www.mattopie.com/onboarding)
-A live **Compliance Intelligence Console** for a multi-tenant institutional client onboarding platform. The dashboard connects to a production .NET 10 AWS Lambda API — no mock data — and demonstrates hybrid RAG over tenant-scoped policy documents.
+A live **Compliance Intelligence Console** for a multi-tenant institutional client onboarding platform. The dashboard connects to production .NET 10 AWS Lambdas — no mock data — and demonstrates hybrid RAG with **live SSE token streaming**, MCP compliance tool logs, ingest status badges, and cached RAGAS faithfulness scores.
 
-Switch between 10 isolated tenants (`tenant_001`–`tenant_010`), run compliance queries, inspect retrieved context (BM25 vs dense vector hits, hybrid rerank scores, parent-child chunks), watch MCP tool invocations in a live execution log, and review per-query telemetry (vector search latency, DynamoDB assembly, RAGAS faithfulness, cross-tenant leak rate).
+Switch between 10 isolated tenants (`tenant_001`–`tenant_010`), run compliance queries, inspect multi-chunk retrieved context with PDF page numbers, watch MCP tool invocations stream in before answer tokens, and review per-query telemetry. Tenant switches reset chat, tool logs, and metrics to prove partition isolation.
 
-The backend uses a single-table DynamoDB schema, Qdrant vector search, BM25 + dense hybrid retrieval with RRF fusion, and an MCP agent layer that runs compliance checks before synthesis. Tenant switches reset chat, tool logs, and metrics to prove partition isolation.
+**Backend repos:** [ClientOnboardingLambda](https://github.com/matthew-opie/ClientOnboardingLambda) · [DocumentIngestLambda](https://github.com/matthew-opie/DocumentIngestLambda) · [McpComplianceServer](https://github.com/matthew-opie/McpComplianceServer)
 
 Also reachable from the nav bar (**AI Onboarding Demo**, after Portfolio) or the [portfolio page](https://www.mattopie.com/portfolio).
 
@@ -76,9 +76,16 @@ The onboarding dashboard requires a configured Lambda Function URL. Set it in [`
 }
 ```
 
-On load, the dashboard calls `GET /health` and `GET /tenants`, then routes queries to `POST /tenants/{id}/query`. If the API is unreachable or `BaseUrl` is empty, the UI shows a connection error instead of falling back to mock data.
+On load, the dashboard calls `GET /health` and `GET /tenants`, then routes queries to `POST /tenants/{id}/query/stream` (SSE) with a non-stream fallback. Regression checks: `.\scripts\run-golden-tests.ps1`.
 
-The Lambda backend lives in a separate repo: [`ClientOnboardingLambda`](https://github.com/matthew-opie/ClientOnboardingLambda) (not included in this repository).
+Backend repos (separate from this site):
+
+| Repo | Purpose |
+|------|---------|
+| [ClientOnboardingLambda](https://github.com/matthew-opie/ClientOnboardingLambda) | Query API, RAG, RAGAS, MCP client |
+| [DocumentIngestLambda](https://github.com/matthew-opie/DocumentIngestLambda) | Async S3→SQS ingest worker |
+| [McpComplianceServer](https://github.com/matthew-opie/McpComplianceServer) | Standalone MCP wire-protocol server |
+| [onboarding-ragas-eval](https://github.com/matthew-opie/onboarding-ragas-eval) | Golden eval datasets |
 
 ### Adding Typing Test Passages
 
