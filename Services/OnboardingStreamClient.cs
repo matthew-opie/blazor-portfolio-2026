@@ -5,6 +5,10 @@ using Microsoft.JSInterop;
 
 namespace blazor_portfolio_2026.Services;
 
+/// <summary>
+/// Bridges Blazor to the Lambda SSE stream via JS interop (<c>wwwroot/js/onboarding-stream.js</c>).
+/// Events: toolLog → token → telemetry → done.
+/// </summary>
 public sealed class OnboardingStreamClient(IJSRuntime js, IConfiguration configuration)
 {
     private readonly string _baseUrl = configuration["OnboardingApi:BaseUrl"]?.Trim().TrimEnd('/') ?? string.Empty;

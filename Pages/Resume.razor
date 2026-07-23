@@ -41,7 +41,8 @@
         <ul class="skills-list">
             <li><strong>Languages:</strong> C#, TypeScript, JavaScript, Python, SQL</li>
             <li><strong>Frameworks &amp; Libraries:</strong> .NET 8 / .NET 10, Angular, Vue.js, jQuery, MATLAB</li>
-            <li><strong>Cloud &amp; DevOps:</strong> Azure DevOps, Azure KeyVault, CI/CD, Git, OAuth2 / Okta, AWS (Lambda, S3)</li>
+            <li><strong>Cloud &amp; DevOps:</strong> Azure DevOps, Azure KeyVault, CI/CD, Git, OAuth2 / Okta, AWS (Lambda, S3, SQS, DynamoDB)</li>
+            <li><strong>AI / Data:</strong> RAG, Vector Search (Qdrant), OpenAI API, MCP, RAGAS, Hybrid Retrieval (BM25 + dense)</li>
             <li><strong>Tools &amp; Platforms:</strong> Datadog, Splunk, SolarWinds, Linux, AI-Assisted Development (Cursor, Claude, ChatGPT)</li>
             <li><strong>Specialties:</strong> Enterprise API Architecture, Microservices, Multi-Tenancy, Secure Logging, Performance Optimization</li>
         </ul>
@@ -50,6 +51,29 @@
 <div class="resume-section">
     <div id="resume-projects" class="resume-subsection">
         <h2>Selected Technical Projects</h2>
+        <div class="experience-row">
+            <div class="experience-header">
+                <div class="company-name">Multi-Tenant RAG Onboarding Platform (Portfolio Demo)</div>
+                <div class="dates">2025 – 2026 · <a href="https://www.mattopie.com/onboarding" target="_blank">Live Demo</a></div>
+            </div>
+            <div class="job-title">Architect &amp; Full-Stack Developer</div>
+            <div class="job-description">
+                <ul>
+                    <li>
+                        Built a production-style institutional onboarding demo on <strong>.NET 10 AWS Lambda</strong> with
+                        hybrid RAG (BM25 + Qdrant RRF fusion), multi-chunk PDF citations, and tenant-isolated DynamoDB/Qdrant partitions.
+                    </li>
+                    <li>
+                        Exposed compliance tools via a standalone <strong>MCP Streamable HTTP server</strong> (Cursor-compatible)
+                        and wired the query Lambda as an MCP client with graceful degradation when the server is unavailable.
+                    </li>
+                    <li>
+                        Delivered end-to-end <strong>SSE token streaming</strong> (Lambda response streaming + OpenAI + Blazor WASM),
+                        async S3→SQS document ingest, cached RAGAS faithfulness evals, golden regression scripts, and unit tests.
+                    </li>
+                </ul>
+            </div>
+        </div>
         <div class="experience-row">
             <div class="experience-header">
                 <div class="company-name">Greenfield Enterprise Insurance API Ecosystem</div>
