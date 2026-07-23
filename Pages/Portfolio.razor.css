@@ -96,6 +96,46 @@
     margin: 0;
 }
 
+.project-architecture {
+    margin-top: 0.35rem;
+}
+
+.architecture-heading {
+    font-size: 0.72rem !important;
+    font-weight: 600 !important;
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    color: var(--text-dim) !important;
+}
+
+.architecture-list {
+    margin: 0.35rem 0 0;
+    padding-left: 1.15rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.55rem;
+}
+
+.architecture-list li {
+    font-size: 0.88rem;
+    color: var(--text-muted);
+    line-height: 1.65;
+}
+
+.architecture-list strong {
+    color: var(--text);
+    font-weight: 600;
+}
+
+.architecture-list code {
+    font-size: 0.82em;
+    color: var(--accent);
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 0.05rem 0.35rem;
+}
+
 .project-tags {
     display: flex;
     flex-direction: column;

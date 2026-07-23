@@ -21,12 +21,69 @@
         <p>A live dashboard demo of a multi-tenant compliance onboarding system built for institutional investors.</p>
         <p>
             The production backend runs on .NET 10 and AWS Serverless: a query Lambda with response streaming, an async
-            ingest worker (S3 → SQS), a standalone MCP compliance server over Streamable HTTP, and a Blazor WASM dashboard.
-            Hybrid RAG combines BM25 keyword search with Qdrant dense embeddings via reciprocal rank fusion, returning
-            multi-chunk context with PDF page citations. Compliance tools run through the real MCP wire protocol before
-            OpenAI synthesis; tokens stream live over SSE. RAGAS faithfulness scores are cached from one-time golden evals.
+            ingest worker (S3 → SQS), a standalone MCP compliance server over Streamable HTTP, and a Blazor WASM dashboard
+            that calls the Function URL directly — no mock data, no BFF layer. Hybrid RAG combines BM25 keyword search with
+            Qdrant dense embeddings via reciprocal rank fusion, returning multi-chunk context with PDF page citations.
+            Compliance tools run through the real MCP wire protocol before OpenAI synthesis; tokens stream live over SSE.
             The UI enforces strict tenant isolation — switching partitions resets chat, tool logs, and telemetry.
         </p>
+
+        <div class="project-architecture">
+            <p class="architecture-heading">Architectural decisions</p>
+            <ul class="architecture-list">
+                <li>
+                    <strong>Portfolio-first scope.</strong>
+                    Optimized for what visitors can try on mattopie.com and explain in an interview — not production ops.
+                    Secrets stay in Lambda env vars; no Secrets Manager rotation, scheduled eval jobs, or CDK pipelines.
+                </li>
+                <li>
+                    <strong>Split query and ingest paths.</strong>
+                    Heavy PDF work (PdfPig, chunking, embeddings) runs in a separate SQS-triggered ingest Lambda so RAG
+                    queries stay fast. S3 upload decouples from indexing; the dashboard reads cached ingest status from DynamoDB.
+                </li>
+                <li>
+                    <strong>Tenant isolation by construction.</strong>
+                    Ten fixed tenants each get their own S3 prefix, Qdrant collection, and DynamoDB partition key
+                    (<code>TENANT#00N</code>) — golden tests verify caps and restricted tickers without cross-tenant leakage.
+                </li>
+                <li>
+                    <strong>Single-table DynamoDB.</strong>
+                    One table holds parent/child chunks, KYC records, ingest jobs (<code>INGEST#latest</code>), and cached
+                    RAGAS scores (<code>EVAL#latest</code>) — partition-scoped reads, minimal infra.
+                </li>
+                <li>
+                    <strong>Parent–child hybrid retrieval.</strong>
+                    Child chunks are searched (BM25 + dense vectors); parent chunks supply LLM context. Reciprocal rank
+                    fusion merges keyword and semantic hits; the top two parents are passed to GPT with page citations.
+                </li>
+                <li>
+                    <strong>Real streaming stack.</strong>
+                    OpenAI token stream → Lambda <code>RESPONSE_STREAM</code> → SSE → Blazor fetch/ReadableStream.
+                    Tool log events arrive before synthesis finishes — replacing the v1 fake typewriter animation.
+                </li>
+                <li>
+                    <strong>MCP as a separate service.</strong>
+                    Compliance tools live in a standalone MCP Lambda (JSON-RPC + SSE). The query Lambda is an HTTP MCP
+                    client with in-process fallback when <code>MCP_SERVER_URL</code> is unset — same UI, external clients
+                    (e.g. Cursor) can call <code>check_ticker_restriction</code> directly.
+                </li>
+                <li>
+                    <strong>RAGAS as cached telemetry.</strong>
+                    Faithfulness scores come from one-time golden-set evals stored in DynamoDB — real RAGAS, not a live
+                    heuristic on every page load and not a nightly cron job.
+                </li>
+                <li>
+                    <strong>CORS at the Function URL only.</strong>
+                    Browser CORS is configured on the Lambda Function URL (including streaming responses). App-level
+                    headers were removed to avoid duplicate <code>Access-Control-Allow-Origin</code> values that break fetch.
+                </li>
+                <li>
+                    <strong>Observability without ops sprawl.</strong>
+                    JSON stage logs and <code>x-request-id</code> correlation per request — enough to trace retrieve → MCP →
+                    OpenAI in CloudWatch, without alarm stacks or paging.
+                </li>
+            </ul>
+        </div>
     </div>
     <div class="project-tags">
         <div class="tags-label">
