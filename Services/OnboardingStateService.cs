@@ -16,7 +16,7 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
         "Is AAPL a restricted ticker?"
     ];
 
-    private static readonly TelemetrySnapshot IdleTelemetry = new(0, 0, 0, 0, 0, 0, IsIdle: true);
+    private static readonly TelemetrySnapshot IdleTelemetry = new(0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: true);
     private static readonly IngestStatusSnapshot UnknownIngestStatus = new("unknown", null, null, null, null, null);
     private static readonly EvalStatusSnapshot UnknownEvalStatus = new("unknown", null, null, null, null);
 
@@ -75,8 +75,12 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
                 return;
             }
 
-            await apiClient.VerifyConnectionAsync(cancellationToken);
-            Tenants = await apiClient.GetTenantsAsync(cancellationToken);
+            var healthTask = apiClient.VerifyConnectionAsync(cancellationToken);
+            var tenantsTask = apiClient.GetTenantsAsync(cancellationToken);
+            var warmTask = apiClient.WarmAsync(cancellationToken);
+
+            await Task.WhenAll(healthTask, tenantsTask, warmTask);
+            Tenants = await tenantsTask;
 
             if (Tenants.Count == 0)
             {

@@ -223,19 +223,29 @@
 
                 <div class="telemetry-grid">
                     <div class="metric-card">
-                        <span class="metric-label">Vector Search p95 Latency</span>
-                        <span class="metric-value">@FormatLatency(State.Telemetry.VectorSearchP95Ms)</span>
-                        <span class="metric-hint">Qdrant HNSW · parent-child fetch</span>
+                        <span class="metric-label">Query Embedding</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.EmbeddingMs)</span>
+                        <span class="metric-hint">OpenAI text-embedding-3-small</span>
                     </div>
                     <div class="metric-card">
-                        <span class="metric-label">DynamoDB Context Assembly</span>
+                        <span class="metric-label">Qdrant Dense Search</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.QdrantSearchMs)</span>
+                        <span class="metric-hint">HNSW · top-8 child hits</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">DynamoDB Child Load</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.DynamoDbAssemblyMs)</span>
-                        <span class="metric-hint">Single-table PK/SK query</span>
+                        <span class="metric-hint">@(State.Telemetry.ChildChunksCached ? "Warm Lambda cache hit" : "Partition CHILD# query")</span>
+                    </div>
+                    <div class="metric-card">
+                        <span class="metric-label">Parent Assembly</span>
+                        <span class="metric-value">@FormatLatency(State.Telemetry.ParentAssemblyMs)</span>
+                        <span class="metric-hint">BatchGet parent chunks</span>
                     </div>
                     <div class="metric-card">
                         <span class="metric-label">Hybrid Rerank</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.HybridRerankMs)</span>
-                        <span class="metric-hint">BM25 + dense fusion</span>
+                        <span class="metric-hint">RRF fusion · BM25 @FormatLatency(State.Telemetry.Bm25Ms) parallel</span>
                     </div>
                     <div class="metric-card metric-card--highlight">
                         <span class="metric-label">RAGAS Faithfulness Score</span>

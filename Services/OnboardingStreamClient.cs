@@ -94,12 +94,16 @@ public sealed class OnboardingStreamHandler(
         }
 
         onTelemetry(new TelemetrySnapshot(
-            payload.VectorSearchP95Ms,
+            payload.EmbeddingMs,
+            payload.QdrantSearchMs,
             payload.DynamoDbAssemblyMs,
+            payload.ParentAssemblyMs,
+            payload.Bm25Ms,
             payload.HybridRerankMs,
             payload.RagasFaithfulness,
             payload.CrossTenantLeakPercent,
             payload.RetrievedChunks,
+            payload.ChildChunksCached,
             IsIdle: false));
         return Task.CompletedTask;
     }
@@ -194,14 +198,26 @@ public sealed class OnboardingStreamHandler(
 
     private sealed class TelemetryPayload
     {
-        [JsonPropertyName("vectorSearchP95Ms")]
-        public double VectorSearchP95Ms { get; set; }
+        [JsonPropertyName("embeddingMs")]
+        public double EmbeddingMs { get; set; }
+
+        [JsonPropertyName("qdrantSearchMs")]
+        public double QdrantSearchMs { get; set; }
 
         [JsonPropertyName("dynamoDbAssemblyMs")]
         public double DynamoDbAssemblyMs { get; set; }
 
+        [JsonPropertyName("parentAssemblyMs")]
+        public double ParentAssemblyMs { get; set; }
+
+        [JsonPropertyName("bm25Ms")]
+        public double Bm25Ms { get; set; }
+
         [JsonPropertyName("hybridRerankMs")]
         public double HybridRerankMs { get; set; }
+
+        [JsonPropertyName("childChunksCached")]
+        public bool ChildChunksCached { get; set; }
 
         [JsonPropertyName("ragasFaithfulness")]
         public double RagasFaithfulness { get; set; }

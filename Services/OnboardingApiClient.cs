@@ -29,6 +29,25 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
         }
     }
 
+    /// <summary>Best-effort warm-up — primes Lambda container, child chunk cache, and Qdrant.</summary>
+    public async Task WarmAsync(CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            return;
+        }
+
+        try
+        {
+            using var response = await http.GetAsync("warm", cancellationToken);
+            _ = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        }
+        catch
+        {
+            // Warm is invisible to users when it fails.
+        }
+    }
+
     public async Task<IReadOnlyList<TenantProfile>> GetTenantsAsync(CancellationToken cancellationToken = default)
     {
         EnsureConfigured();
@@ -175,14 +194,18 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
             .ToList() ?? [];
 
         var telemetry = payload.Telemetry is null
-            ? new TelemetrySnapshot(0, 0, 0, 0, 0, 0, IsIdle: false)
+            ? new TelemetrySnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: false)
             : new TelemetrySnapshot(
-                payload.Telemetry.VectorSearchP95Ms,
+                payload.Telemetry.EmbeddingMs,
+                payload.Telemetry.QdrantSearchMs,
                 payload.Telemetry.DynamoDbAssemblyMs,
+                payload.Telemetry.ParentAssemblyMs,
+                payload.Telemetry.Bm25Ms,
                 payload.Telemetry.HybridRerankMs,
                 payload.Telemetry.RagasFaithfulness,
                 payload.Telemetry.CrossTenantLeakPercent,
                 payload.Telemetry.RetrievedChunks,
+                payload.Telemetry.ChildChunksCached,
                 IsIdle: false);
 
         return new OnboardingQueryResult(payload.Message, contexts, toolLogs, telemetry);
@@ -369,14 +392,26 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
 
     private sealed class TelemetryPayload
     {
-        [JsonPropertyName("vectorSearchP95Ms")]
-        public double VectorSearchP95Ms { get; set; }
+        [JsonPropertyName("embeddingMs")]
+        public double EmbeddingMs { get; set; }
+
+        [JsonPropertyName("qdrantSearchMs")]
+        public double QdrantSearchMs { get; set; }
 
         [JsonPropertyName("dynamoDbAssemblyMs")]
         public double DynamoDbAssemblyMs { get; set; }
 
+        [JsonPropertyName("parentAssemblyMs")]
+        public double ParentAssemblyMs { get; set; }
+
+        [JsonPropertyName("bm25Ms")]
+        public double Bm25Ms { get; set; }
+
         [JsonPropertyName("hybridRerankMs")]
         public double HybridRerankMs { get; set; }
+
+        [JsonPropertyName("childChunksCached")]
+        public bool ChildChunksCached { get; set; }
 
         [JsonPropertyName("ragasFaithfulness")]
         public double RagasFaithfulness { get; set; }

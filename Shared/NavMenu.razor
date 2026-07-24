@@ -1,3 +1,5 @@
+@inject OnboardingApiClient OnboardingApi
+
 <nav class="topnav">
     <a class="brand" href="">Matt Opie</a>
 
@@ -12,7 +14,7 @@
             <NavLink href="" Match="NavLinkMatch.All">Home</NavLink>
             <NavLink href="resume">Résumé</NavLink>
             <NavLink href="portfolio">Portfolio</NavLink>
-            <NavLink href="onboarding">AI Onboarding Demo</NavLink>
+            <NavLink href="onboarding" @onmouseenter="PrefetchOnboarding">AI Onboarding Demo</NavLink>
             <NavLink href="cv">CV Playground</NavLink>
             <NavLink href="typing">Typing</NavLink>
             <NavLink href="markdown">Markdown</NavLink>
@@ -38,4 +40,5 @@
 @code {
     private bool menuOpen = false;
     private void ToggleMenu() => menuOpen = !menuOpen;
+    private void PrefetchOnboarding() => _ = OnboardingApi.WarmAsync();
 }

@@ -69,12 +69,16 @@ public sealed record McpToolLogEntry(
 
 /// <summary>Per-interaction telemetry surfaced in the benchmarking panel.</summary>
 public sealed record TelemetrySnapshot(
-    double VectorSearchP95Ms,
+    double EmbeddingMs,
+    double QdrantSearchMs,
     double DynamoDbAssemblyMs,
+    double ParentAssemblyMs,
+    double Bm25Ms,
     double HybridRerankMs,
     double RagasFaithfulness,
     double CrossTenantLeakPercent,
     int RetrievedChunks,
+    bool ChildChunksCached,
     bool IsIdle);
 
 /// <summary>Latest document ingest status for a tenant.</summary>

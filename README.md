@@ -76,7 +76,7 @@ The onboarding dashboard requires a configured Lambda Function URL. Set it in [`
 }
 ```
 
-On load, the dashboard calls `GET /health` and `GET /tenants`, then routes queries to `POST /tenants/{id}/query/stream` (SSE) with a non-stream fallback. Regression checks: `.\scripts\run-golden-tests.ps1`.
+On load, the dashboard runs `GET /health`, `GET /tenants`, and `GET /warm` in parallel. Nav hover on **AI Onboarding Demo** also calls `GET /warm` (best-effort, no OpenAI cost). Queries use `POST /tenants/{id}/query/stream` (SSE) with a non-stream fallback. Regression checks: `.\scripts\run-golden-tests.ps1`.
 
 Backend repos (separate from this site):
 
