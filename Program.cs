@@ -10,7 +10,18 @@ builder.RootComponents.Add<App>("#app");
 builder.RootComponents.Add<HeadOutlet>("head::after");
 
 builder.Services.AddScoped(_ => new HttpClient { BaseAddress = new Uri(builder.HostEnvironment.BaseAddress) });
-builder.Services.AddScoped<OnboardingApiClient>();
+builder.Services.AddScoped<OnboardingApiClient>(sp =>
+{
+    var configuration = sp.GetRequiredService<IConfiguration>();
+    var baseUrl = configuration["OnboardingApi:BaseUrl"]?.Trim().TrimEnd('/');
+    var http = new HttpClient();
+    if (!string.IsNullOrWhiteSpace(baseUrl))
+    {
+        http.BaseAddress = new Uri(baseUrl + "/");
+    }
+
+    return new OnboardingApiClient(http, configuration);
+});
 builder.Services.AddScoped<OnboardingStreamClient>();
 builder.Services.AddScoped<OnboardingStateService>();
 

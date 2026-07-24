@@ -9,7 +9,7 @@ namespace blazor_portfolio_2026.Services;
 /// </summary>
 public sealed class OnboardingApiClient(HttpClient http, IConfiguration configuration)
 {
-    private readonly string _baseUrl = ConfigureBaseUrl(http, configuration);
+    private readonly string _baseUrl = ConfigureBaseUrl(configuration);
 
     public bool IsConfigured => !string.IsNullOrWhiteSpace(_baseUrl);
 
@@ -142,16 +142,8 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
             payload.Error);
     }
 
-    private static string ConfigureBaseUrl(HttpClient http, IConfiguration configuration)
-    {
-        var baseUrl = configuration["OnboardingApi:BaseUrl"]?.Trim() ?? string.Empty;
-        if (!string.IsNullOrWhiteSpace(baseUrl))
-        {
-            http.BaseAddress = new Uri(baseUrl.TrimEnd('/') + "/");
-        }
-
-        return baseUrl;
-    }
+    private static string ConfigureBaseUrl(IConfiguration configuration) =>
+        configuration["OnboardingApi:BaseUrl"]?.Trim() ?? string.Empty;
 
     private void EnsureConfigured()
     {
