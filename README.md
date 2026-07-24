@@ -66,15 +66,15 @@ dotnet run --urls http://localhost:5201
 
 ### AI Onboarding Demo API
 
-The onboarding dashboard requires a configured Lambda Function URL. Set it in [`wwwroot/appsettings.json`](wwwroot/appsettings.json):
+The onboarding dashboard needs a Lambda Function URL. **Do not commit it** — use a local `.env` file:
 
-```json
-{
-  "OnboardingApi": {
-    "BaseUrl": "https://your-lambda-url.lambda-url.us-east-1.on.aws"
-  }
-}
+```powershell
+Copy-Item .env.example .env
+# Edit .env → set ONBOARDING_API_BASE_URL=https://….lambda-url.us-east-1.on.aws
+dotnet run
 ```
+
+`dotnet build` / `dotnet run` generates `wwwroot/appsettings.json` from `.env` automatically when `.env` exists. See [`docs/deploy-secrets.md`](docs/deploy-secrets.md) for GitHub Actions setup.
 
 On load, the dashboard runs `GET /health`, `GET /tenants`, and `GET /warm` in parallel. Nav hover on **AI Onboarding Demo** also calls `GET /warm` (best-effort, no OpenAI cost). Queries use `POST /tenants/{id}/query/stream` (SSE) with a non-stream fallback. Regression checks: `.\scripts\run-golden-tests.ps1`.
 

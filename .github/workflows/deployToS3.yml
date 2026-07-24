@@ -19,6 +19,21 @@ jobs:
       with:
         dotnet-version: '10.0.*'
 
+    - name: Inject production appsettings
+      env:
+        ONBOARDING_API_BASE_URL: ${{ secrets.ONBOARDING_API_BASE_URL }}
+      run: |
+        if [ -z "$ONBOARDING_API_BASE_URL" ]; then
+          echo "::error::ONBOARDING_API_BASE_URL repository secret is required for deploy builds."
+          exit 1
+        fi
+        printf '%s\n' \
+          '{' \
+          '  "OnboardingApi": {' \
+          "    \"BaseUrl\": \"${ONBOARDING_API_BASE_URL%/}\"" \
+          '  }' \
+          '}' > wwwroot/appsettings.json
+
     - name: Build with dotnet
       run: dotnet build --configuration Release
 

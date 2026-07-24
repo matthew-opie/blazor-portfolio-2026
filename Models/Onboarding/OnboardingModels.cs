@@ -77,6 +77,7 @@ public sealed record TelemetrySnapshot(
     double HybridRerankMs,
     double RagasFaithfulness,
     double CrossTenantLeakPercent,
+    int DataPlaneChecks,
     int RetrievedChunks,
     bool ChildChunksCached,
     bool IsIdle);

@@ -16,7 +16,7 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
         "Is AAPL a restricted ticker?"
     ];
 
-    private static readonly TelemetrySnapshot IdleTelemetry = new(0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: true);
+    private static readonly TelemetrySnapshot IdleTelemetry = new(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: true);
     private static readonly IngestStatusSnapshot UnknownIngestStatus = new("unknown", null, null, null, null, null);
     private static readonly EvalStatusSnapshot UnknownEvalStatus = new("unknown", null, null, null, null);
 
@@ -71,7 +71,7 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
         {
             if (!apiClient.IsConfigured)
             {
-                ConnectionError = "Set OnboardingApi:BaseUrl in wwwroot/appsettings.json.";
+                ConnectionError = "Copy .env.example to .env and set ONBOARDING_API_BASE_URL, then rebuild.";
                 return;
             }
 
@@ -303,7 +303,7 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
                 .ToList();
 
             StatusMessage =
-                $"Completed · {Telemetry.RetrievedChunks} chunk(s) retrieved · 0% cross-tenant reads";
+                $"Completed · {Telemetry.RetrievedChunks} chunk(s) retrieved · {FormatLeakSummary(Telemetry)}";
         }
         catch (OperationCanceledException)
         {
@@ -382,4 +382,9 @@ public sealed class OnboardingStateService(OnboardingApiClient apiClient, Onboar
     }
 
     private void Notify() => OnChange?.Invoke();
+
+    private static string FormatLeakSummary(TelemetrySnapshot telemetry) =>
+        telemetry.IsIdle || telemetry.DataPlaneChecks <= 0
+            ? "isolation not measured"
+            : $"{telemetry.CrossTenantLeakPercent:F0}% cross-partition reads ({telemetry.DataPlaneChecks} checks)";
 }

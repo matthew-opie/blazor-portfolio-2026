@@ -157,7 +157,7 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
     {
         if (!IsConfigured)
         {
-            throw new InvalidOperationException("OnboardingApi:BaseUrl is not configured in wwwroot/appsettings.json.");
+            throw new InvalidOperationException("OnboardingApi:BaseUrl is not configured. Copy .env.example to .env, set ONBOARDING_API_BASE_URL, then rebuild.");
         }
     }
 
@@ -194,7 +194,7 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
             .ToList() ?? [];
 
         var telemetry = payload.Telemetry is null
-            ? new TelemetrySnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: false)
+            ? new TelemetrySnapshot(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, false, IsIdle: false)
             : new TelemetrySnapshot(
                 payload.Telemetry.EmbeddingMs,
                 payload.Telemetry.QdrantSearchMs,
@@ -204,6 +204,7 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
                 payload.Telemetry.HybridRerankMs,
                 payload.Telemetry.RagasFaithfulness,
                 payload.Telemetry.CrossTenantLeakPercent,
+                payload.Telemetry.DataPlaneChecks,
                 payload.Telemetry.RetrievedChunks,
                 payload.Telemetry.ChildChunksCached,
                 IsIdle: false);
@@ -418,6 +419,9 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
 
         [JsonPropertyName("crossTenantLeakPercent")]
         public double CrossTenantLeakPercent { get; set; }
+
+        [JsonPropertyName("dataPlaneChecks")]
+        public int DataPlaneChecks { get; set; }
 
         [JsonPropertyName("retrievedChunks")]
         public int RetrievedChunks { get; set; }

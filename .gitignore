@@ -4,3 +4,7 @@ obj/
 *.user
 .claude/
 .idea/
+
+# Local secrets — use .env.example as template
+.env
+wwwroot/appsettings.json

@@ -102,6 +102,7 @@ public sealed class OnboardingStreamHandler(
             payload.HybridRerankMs,
             payload.RagasFaithfulness,
             payload.CrossTenantLeakPercent,
+            payload.DataPlaneChecks,
             payload.RetrievedChunks,
             payload.ChildChunksCached,
             IsIdle: false));
@@ -224,6 +225,9 @@ public sealed class OnboardingStreamHandler(
 
         [JsonPropertyName("crossTenantLeakPercent")]
         public double CrossTenantLeakPercent { get; set; }
+
+        [JsonPropertyName("dataPlaneChecks")]
+        public int DataPlaneChecks { get; set; }
 
         [JsonPropertyName("retrievedChunks")]
         public int RetrievedChunks { get; set; }

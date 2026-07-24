@@ -253,9 +253,9 @@
                         <span class="metric-hint">@State.FormatEvalHint()</span>
                     </div>
                     <div class="metric-card metric-card--success">
-                        <span class="metric-label">Cross-Tenant Data Leaks</span>
-                        <span class="metric-value">@State.Telemetry.CrossTenantLeakPercent.ToString("F0")%</span>
-                        <span class="metric-hint">Partition guard enforced</span>
+                        <span class="metric-label">Cross-Partition Reads</span>
+                        <span class="metric-value">@FormatLeakPercent(State.Telemetry)</span>
+                        <span class="metric-hint">@FormatLeakHint(State.Telemetry)</span>
                     </div>
                     <div class="metric-card">
                         <span class="metric-label">Retrieved Chunks</span>
@@ -325,6 +325,16 @@
 
     private static string FormatLatency(double ms) =>
         ms <= 0 ? "—" : $"< {Math.Max(1, (int)Math.Ceiling(ms))}ms";
+
+    private static string FormatLeakPercent(TelemetrySnapshot telemetry) =>
+        telemetry.IsIdle || telemetry.DataPlaneChecks <= 0
+            ? "—"
+            : $"{telemetry.CrossTenantLeakPercent:F0}%";
+
+    private static string FormatLeakHint(TelemetrySnapshot telemetry) =>
+        telemetry.IsIdle || telemetry.DataPlaneChecks <= 0
+            ? "Measured per query from DynamoDB + Qdrant scope checks"
+            : $"{telemetry.DataPlaneChecks} data-plane checks · 0 violations means every read stayed in tenant partition/collection";
 
     private static string FormatScore(double? score) =>
         score is null or <= 0 ? "—" : score.Value.ToString("F2");

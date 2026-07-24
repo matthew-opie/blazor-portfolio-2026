@@ -20,4 +20,8 @@
     <_ContentIncludedByDefault Remove="Layout\NavMenu.razor" />
   </ItemGroup>
 
+  <Target Name="GenerateAppSettingsFromEnv" BeforeTargets="BeforeBuild" Condition="Exists('$(MSBuildProjectDirectory)\.env')">
+    <Exec Command="powershell -NoProfile -ExecutionPolicy Bypass -File &quot;$(MSBuildProjectDirectory)\scripts\generate-appsettings.ps1&quot;" />
+  </Target>
+
 </Project>
