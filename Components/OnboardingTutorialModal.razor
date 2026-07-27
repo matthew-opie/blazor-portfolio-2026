@@ -1,0 +1,314 @@
+@using blazor_portfolio_2026.Models.Onboarding
+@inject IJSRuntime JS
+
+@if (Visible)
+{
+    <div class="tutorial-backdrop" @onclick="RequestClose">
+        <div class="tutorial-modal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="tutorial-title"
+             @onclick:stopPropagation="true"
+             @onkeydown="HandleKeyDown">
+            <header class="tutorial-header">
+                <div class="tutorial-step-dots" aria-hidden="true">
+                    @for (var i = 0; i < StepCount; i++)
+                    {
+                        var step = i;
+                        <span class="tutorial-dot @(step == _currentStep ? "tutorial-dot--active" : step < _currentStep ? "tutorial-dot--done" : "")"></span>
+                    }
+                </div>
+                <button type="button" class="tutorial-close" @onclick="RequestClose" aria-label="Close tutorial">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+
+            <div class="tutorial-body">
+                @switch (_currentStep)
+                {
+                    case 0:
+                        <section class="tutorial-section">
+                            <p class="tutorial-eyebrow">Portfolio demo</p>
+                            <h2 id="tutorial-title" class="tutorial-title">What am I looking at?</h2>
+                            <p class="tutorial-lead">
+                                A live <strong>Compliance Intelligence Console</strong> for institutional client onboarding —
+                                the kind of tool a wealth manager or fund administrator would use to query policy documents,
+                                run compliance checks, and audit AI-generated answers.
+                            </p>
+                            <ul class="tutorial-list">
+                                <li>
+                                    <i class="fa-solid fa-bolt"></i>
+                                    <span><strong>Real backend</strong> — queries hit production .NET 10 AWS Lambdas, not mock data.</span>
+                                </li>
+                                <li>
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    <span><strong>Hybrid RAG</strong> — BM25 keyword search fused with Qdrant dense vectors over indexed PDFs.</span>
+                                </li>
+                                <li>
+                                    <i class="fa-solid fa-shield-halved"></i>
+                                    <span><strong>Tenant isolation</strong> — ten separate clients; switching tenants resets chat and proves partition boundaries.</span>
+                                </li>
+                            </ul>
+                        </section>
+                        break;
+
+                    case 1:
+                        <section class="tutorial-section">
+                            <p class="tutorial-eyebrow">Layout</p>
+                            <h2 class="tutorial-title">Three panels, one pipeline</h2>
+                            <div class="tutorial-panels">
+                                <article class="tutorial-panel-card">
+                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-comments"></i></span>
+                                    <h3>RAG Query Interface</h3>
+                                    <p>Ask natural-language questions about IPS limits, KYC details, or restricted tickers. Answers stream live with expandable source citations.</p>
+                                </article>
+                                <article class="tutorial-panel-card">
+                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-terminal"></i></span>
+                                    <h3>MCP Tool Execution Log</h3>
+                                    <p>Before synthesis, the agent invokes compliance tools over the Model Context Protocol — ticker checks, limit lookups — with full request/response traces.</p>
+                                </article>
+                                <article class="tutorial-panel-card">
+                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-chart-line"></i></span>
+                                    <h3>Benchmarking &amp; Telemetry</h3>
+                                    <p>Per-query latency breakdown (embedding, Qdrant, DynamoDB, rerank) plus cached RAGAS faithfulness scores and cross-partition isolation checks.</p>
+                                </article>
+                            </div>
+                            <p class="tutorial-note">
+                                Use the <strong>Active Tenant</strong> selector in the header to switch between ten isolated institutional clients —
+                                each with its own S3 prefix, Qdrant collection, and DynamoDB partition key.
+                            </p>
+                        </section>
+                        break;
+
+                    case 2:
+                        <section class="tutorial-section">
+                            <p class="tutorial-eyebrow">Transparency</p>
+                            <h2 class="tutorial-title">Understanding response details</h2>
+                            <p class="tutorial-lead">
+                                After the Compliance Agent answers, expand <strong>Retrieved Context</strong> on any response to inspect the exact policy text used.
+                            </p>
+                            <dl class="tutorial-glossary">
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--bm25">BM25 Hit</span></dt>
+                                    <dd>Chunk surfaced by keyword (lexical) search — strong for exact terms like ticker symbols or section numbers.</dd>
+                                </div>
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--densevector">Dense Vector Hit</span></dt>
+                                    <dd>Chunk surfaced by semantic embedding similarity in Qdrant — strong for paraphrased or conceptual questions.</dd>
+                                </div>
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span></dt>
+                                    <dd>Chunk was promoted through reciprocal rank fusion, merging BM25 and dense results into a final ranking.</dd>
+                                </div>
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--page">page N</span></dt>
+                                    <dd>PDF page number for audit trails — maps back to the original uploaded document.</dd>
+                                </div>
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--parent">Parent Chunk size</span></dt>
+                                    <dd>Token window of the parent chunk passed to the LLM (child chunks are searched; parents supply context).</dd>
+                                </div>
+                                <div class="tutorial-glossary-row">
+                                    <dt><span class="retrieval-badge retrieval-badge--score">Score</span></dt>
+                                    <dd>Post-rerank relevance score — higher values indicate stronger match to your query.</dd>
+                                </div>
+                            </dl>
+                        </section>
+                        break;
+
+                    case 3:
+                        <section class="tutorial-section">
+                            <p class="tutorial-eyebrow">Corpus</p>
+                            <h2 class="tutorial-title">Indexed documents</h2>
+                            @if (ActiveTenant is not null)
+                            {
+                                <p class="tutorial-lead">
+                                    Each tenant has three policy PDFs indexed for search
+                                    @if (IngestBadge is not null)
+                                    {
+                                        <span class="tutorial-ingest-badge">@IngestBadge</span>
+                                    }
+                                    — values differ per client, document types stay consistent.
+                                </p>
+                                <ul class="tutorial-doc-list">
+                                    @foreach (var doc in Documents)
+                                    {
+                                        <li class="tutorial-doc-card">
+                                            <div class="tutorial-doc-header">
+                                                <h3>@doc.DisplayName</h3>
+                                                <code class="tutorial-doc-id">@doc.DocumentId</code>
+                                            </div>
+                                            <p>@doc.Description</p>
+                                            <button type="button"
+                                                    class="tutorial-doc-query"
+                                                    disabled="@(!CanRunQuery)"
+                                                    @onclick="() => RunDocumentQuery(doc.SampleQuery)">
+                                                <i class="fa-solid fa-magnifying-glass"></i>
+                                                Try: @doc.SampleQuery
+                                            </button>
+                                        </li>
+                                    }
+                                </ul>
+                            }
+                            else
+                            {
+                                <p class="tutorial-lead">Connect to the onboarding API to browse indexed documents for the active tenant.</p>
+                            }
+                        </section>
+                        break;
+
+                    case 4:
+                        <section class="tutorial-section">
+                            <p class="tutorial-eyebrow">Ready</p>
+                            <h2 class="tutorial-title">Try a demo query</h2>
+                            <p class="tutorial-lead">
+                                Pick a starter question below or use the <strong>Demo queries</strong> chips in the chat panel.
+                                Watch MCP tools fire first, then the answer stream with cited sources.
+                            </p>
+                            <div class="tutorial-starters">
+                                @foreach (var sample in SampleQueries)
+                                {
+                                    <button type="button"
+                                            class="tutorial-starter"
+                                            disabled="@(!CanRunQuery)"
+                                            @onclick="() => RunDocumentQuery(sample)">
+                                        @sample
+                                    </button>
+                                }
+                            </div>
+                            <label class="tutorial-dismiss-check">
+                                <input type="checkbox" @bind="_dontShowAgain" />
+                                Don't show this guide on future visits
+                            </label>
+                        </section>
+                        break;
+                }
+            </div>
+
+            <footer class="tutorial-footer">
+                @if (_currentStep > 0)
+                {
+                    <button type="button" class="tutorial-btn tutorial-btn--ghost" @onclick="PreviousStep">
+                        Back
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="tutorial-btn tutorial-btn--ghost" @onclick="RequestClose">
+                        Skip
+                    </button>
+                }
+
+                @if (_currentStep < StepCount - 1)
+                {
+                    <button type="button" class="tutorial-btn tutorial-btn--primary" @onclick="NextStep">
+                        Next
+                    </button>
+                }
+                else
+                {
+                    <button type="button" class="tutorial-btn tutorial-btn--primary" @onclick="Finish">
+                        Get started
+                    </button>
+                }
+            </footer>
+        </div>
+    </div>
+}
+
+@code {
+    private const int StepCount = 5;
+
+    private int _currentStep;
+    private bool _dontShowAgain = true;
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public TenantProfile? ActiveTenant { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<IndexedDocument> Documents { get; set; } = [];
+
+    [Parameter]
+    public IReadOnlyList<string> SampleQueries { get; set; } = [];
+
+    [Parameter]
+    public string? IngestBadge { get; set; }
+
+    [Parameter]
+    public bool CanRunQuery { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    [Parameter]
+    public EventCallback<string> OnRunSampleQuery { get; set; }
+
+    public void Reset()
+    {
+        _currentStep = 0;
+        _dontShowAgain = true;
+    }
+
+    private void NextStep()
+    {
+        if (_currentStep < StepCount - 1)
+        {
+            _currentStep++;
+        }
+    }
+
+    private void PreviousStep()
+    {
+        if (_currentStep > 0)
+        {
+            _currentStep--;
+        }
+    }
+
+    private async Task RequestClose()
+    {
+        await CloseAsync(markSeen: false);
+    }
+
+    private async Task Finish()
+    {
+        await CloseAsync(markSeen: _dontShowAgain);
+    }
+
+    private async Task CloseAsync(bool markSeen)
+    {
+        if (markSeen)
+        {
+            await JS.InvokeVoidAsync("onboardingPrefs.markTutorialSeen");
+        }
+
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task RunDocumentQuery(string query)
+    {
+        if (!CanRunQuery)
+        {
+            return;
+        }
+
+        if (_dontShowAgain)
+        {
+            await JS.InvokeVoidAsync("onboardingPrefs.markTutorialSeen");
+        }
+
+        await OnRunSampleQuery.InvokeAsync(query);
+        await OnClose.InvokeAsync();
+    }
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await RequestClose();
+        }
+    }
+}

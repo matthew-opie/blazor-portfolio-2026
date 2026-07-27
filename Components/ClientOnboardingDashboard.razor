@@ -1,6 +1,17 @@
 @using blazor_portfolio_2026.Models.Onboarding
 @inject OnboardingStateService State
+@inject IJSRuntime JS
 @implements IDisposable
+
+<OnboardingTutorialModal @ref="_tutorialModal"
+                         Visible="_showTutorial"
+                         ActiveTenant="State.ActiveTenant"
+                         Documents="_indexedDocuments"
+                         SampleQueries="State.SuggestedQueries"
+                         IngestBadge="@State.FormatIngestBadge()"
+                         CanRunQuery="@(State.IsConnected && !State.IsProcessing)"
+                         OnClose="CloseTutorial"
+                         OnRunSampleQuery="RunTutorialQuery" />
 
 <div class="onboarding-dashboard">
     <header class="dashboard-header">
@@ -13,9 +24,18 @@
         </div>
 
         <div class="tenant-switcher">
-            <label class="tenant-label" for="tenant-select">
-                <i class="fa-solid fa-shield-halved"></i> Active Tenant
-            </label>
+            <div class="tenant-switcher-top">
+                <label class="tenant-label" for="tenant-select">
+                    <i class="fa-solid fa-shield-halved"></i> Active Tenant
+                </label>
+                <button type="button"
+                        class="tutorial-help-btn"
+                        title="Show onboarding guide"
+                        @onclick="OpenTutorial">
+                    <i class="fa-solid fa-circle-question"></i>
+                    <span>Guide</span>
+                </button>
+            </div>
             <select id="tenant-select"
                     class="tenant-select"
                     @bind="_selectedTenantId"
@@ -272,12 +292,18 @@
     private string _queryText = string.Empty;
     private ElementReference _transcriptRef;
     private TenantId _selectedTenantId = TenantId.Tenant001;
+    private bool _showTutorial;
+    private bool _tutorialEligibilityChecked;
+    private IReadOnlyList<IndexedDocument> _indexedDocuments = [];
+    private OnboardingTutorialModal? _tutorialModal;
 
     protected override async Task OnInitializedAsync()
     {
         State.OnChange += HandleStateChanged;
         await State.InitializeAsync();
         _selectedTenantId = State.ActiveTenant?.Id ?? TenantId.Tenant001;
+        RefreshIndexedDocuments();
+        await TryShowTutorialOnFirstVisitAsync();
     }
 
     private void HandleStateChanged()
@@ -285,9 +311,54 @@
         if (State.ActiveTenant is not null)
         {
             _selectedTenantId = State.ActiveTenant.Id;
+            RefreshIndexedDocuments();
         }
 
         InvokeAsync(StateHasChanged);
+    }
+
+    private void RefreshIndexedDocuments()
+    {
+        if (State.ActiveTenant is null)
+        {
+            _indexedDocuments = [];
+            return;
+        }
+
+        _indexedDocuments = TenantDocumentCatalog.GetDocuments(State.ActiveTenant.Id);
+    }
+
+    private async Task TryShowTutorialOnFirstVisitAsync()
+    {
+        if (_tutorialEligibilityChecked || !State.IsConnected)
+        {
+            return;
+        }
+
+        _tutorialEligibilityChecked = true;
+
+        var seen = await JS.InvokeAsync<bool>("onboardingPrefs.hasSeenTutorial");
+        if (!seen)
+        {
+            _showTutorial = true;
+        }
+    }
+
+    private void OpenTutorial()
+    {
+        _tutorialModal?.Reset();
+        _showTutorial = true;
+    }
+
+    private void CloseTutorial()
+    {
+        _showTutorial = false;
+    }
+
+    private async Task RunTutorialQuery(string query)
+    {
+        _showTutorial = false;
+        await State.SubmitQueryAsync(query);
     }
 
     private void OnTenantSwitched()
