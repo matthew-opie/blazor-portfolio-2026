@@ -59,6 +59,20 @@
     overflow-wrap: anywhere;
 }
 
+.context-body-header {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 0.65rem;
+    margin-bottom: 0.45rem;
+}
+
+.context-body-header .context-section {
+    margin: 0;
+    flex: 1;
+    min-width: 0;
+}
+
 .context-text {
     margin: 0;
     font-size: 0.75rem;

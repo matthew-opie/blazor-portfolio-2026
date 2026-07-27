@@ -1,5 +1,6 @@
 @using blazor_portfolio_2026.Models.Onboarding
 @inject OnboardingStateService State
+@inject OnboardingApiClient OnboardingApi
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -12,6 +13,13 @@
                          CanRunQuery="@(State.IsConnected && !State.IsProcessing)"
                          OnClose="CloseTutorial"
                          OnRunSampleQuery="RunTutorialQuery" />
+
+<OnboardingDocumentViewerModal Visible="_showDocumentViewer"
+                               ActiveTenant="State.ActiveTenant"
+                               Documents="_indexedDocuments"
+                               InitialDocumentId="_viewerDocumentId"
+                               InitialPage="_viewerPage"
+                               OnClose="CloseDocumentViewer" />
 
 <div class="onboarding-dashboard">
     <header class="dashboard-header">
@@ -36,22 +44,38 @@
                     <span>Guide</span>
                 </button>
             </div>
-            <select id="tenant-select"
-                    class="tenant-select"
-                    @bind="_selectedTenantId"
-                    @bind:after="OnTenantSwitched"
-                    disabled="@(!State.IsConnected || State.IsProcessing)">
-                @foreach (var tenant in State.Tenants)
-                {
-                    <option value="@tenant.Id">@tenant.DisplayId — @tenant.InstitutionType</option>
-                }
-            </select>
+            <div class="tenant-switcher-row">
+                <button type="button"
+                        class="view-documents-btn"
+                        title="Browse indexed policy PDFs"
+                        disabled="@(State.ActiveTenant is null || !State.IsConnected)"
+                        @onclick='() => OpenDocumentViewer()'>
+                    <i class="fa-solid fa-file-pdf"></i>
+                    <span>Documents</span>
+                </button>
+                <select id="tenant-select"
+                        class="tenant-select"
+                        @bind="_selectedTenantId"
+                        @bind:after="OnTenantSwitched"
+                        disabled="@(!State.IsConnected || State.IsProcessing)">
+                    @foreach (var tenant in State.Tenants)
+                    {
+                        <option value="@tenant.Id">@tenant.DisplayId — @tenant.InstitutionType</option>
+                    }
+                </select>
+            </div>
             @if (State.ActiveTenant is not null)
             {
                 <div class="tenant-meta">
-                    <span class="meta-chip meta-chip--ingest @GetIngestBadgeClass()">@State.FormatIngestBadge()</span>
-                    <span class="meta-chip">PK: @State.ActiveTenant.PartitionKey</span>
-                    <span class="meta-chip">@State.ActiveTenant.VectorCollection</span>
+                    <ObTooltip Text="Document ingest status from DynamoDB INGEST#latest — PDFs chunked and embedded into this tenant's search index.">
+                        <span class="meta-chip meta-chip--ingest @GetIngestBadgeClass()">@State.FormatIngestBadge()</span>
+                    </ObTooltip>
+                    <ObTooltip Text="DynamoDB partition key — all reads for this tenant are scoped to this partition; cross-partition access is audited in telemetry.">
+                        <span class="meta-chip">PK: @State.ActiveTenant.PartitionKey</span>
+                    </ObTooltip>
+                    <ObTooltip Text="Isolated Qdrant vector collection — dense search never leaves this tenant's embedding index.">
+                        <span class="meta-chip">@State.ActiveTenant.VectorCollection</span>
+                    </ObTooltip>
                 </div>
             }
         </div>
@@ -85,7 +109,9 @@
         <section class="panel panel-chat">
             <div class="panel-header">
                 <span class="panel-title"><i class="fa-solid fa-comments"></i> RAG Query Interface</span>
-                <span class="panel-badge">Hybrid BM25 + Dense</span>
+                <ObTooltip Text="Retrieval combines BM25 keyword search with Qdrant dense vectors, fused via reciprocal rank fusion before GPT synthesis.">
+                    <span class="panel-badge">Hybrid BM25 + Dense</span>
+                </ObTooltip>
             </div>
 
             <div class="chat-transcript" @ref="_transcriptRef">
@@ -110,20 +136,28 @@
                             var additionalContexts = message.Contexts.Skip(1).ToList();
 
                             <div class="context-card">
-                                <button type="button"
-                                        class="context-toggle"
-                                        @onclick="() => State.ToggleContextExpanded(index)">
-                                    <i class="fa-solid @(message.ContextExpanded ? "fa-chevron-up" : "fa-chevron-down")"></i>
-                                    Retrieved Context@if (primaryContext.PageNumber > 0)
-                                    {
-                                        <text> · page @primaryContext.PageNumber</text>
-                                    }
-                                    <span class="context-doc">@primaryContext.DocumentId</span>
-                                </button>
+                                <div class="context-card-toolbar">
+                                    <button type="button"
+                                            class="context-toggle"
+                                            @onclick="() => State.ToggleContextExpanded(index)">
+                                        <i class="fa-solid @(message.ContextExpanded ? "fa-chevron-up" : "fa-chevron-down")"></i>
+                                        Retrieved Context@if (primaryContext.PageNumber > 0)
+                                        {
+                                            <text> · page @primaryContext.PageNumber</text>
+                                        }
+                                        <span class="context-doc">@primaryContext.DocumentId</span>
+                                    </button>
+                                    <button type="button"
+                                            class="context-view-doc"
+                                            @onclick="() => OpenDocumentViewer(primaryContext.DocumentId, primaryContext.PageNumber)">
+                                        <i class="fa-solid fa-file-pdf"></i> View PDF
+                                    </button>
+                                </div>
 
                                 @if (message.ContextExpanded)
                                 {
-                                    <RetrievedContextBody Context="primaryContext" />
+                                    <RetrievedContextBody Context="primaryContext"
+                                                          OnViewDocument="ViewDocumentFromContext" />
                                 }
                             </div>
 
@@ -149,8 +183,14 @@
                                                 {
                                                     <span class="retrieval-badge retrieval-badge--page">page @context.PageNumber</span>
                                                 }
+                                                <button type="button"
+                                                        class="context-view-doc"
+                                                        @onclick="() => OpenDocumentViewer(context.DocumentId, context.PageNumber)">
+                                                    <i class="fa-solid fa-file-pdf"></i> View PDF
+                                                </button>
                                             </div>
-                                            <RetrievedContextBody Context="context" />
+                                            <RetrievedContextBody Context="context"
+                                                                  OnViewDocument="ViewDocumentFromContext" />
                                         </div>
                                     }
                                 }
@@ -201,7 +241,9 @@
             <section class="panel panel-mcp">
                 <div class="panel-header">
                     <span class="panel-title"><i class="fa-solid fa-terminal"></i> MCP Tool Execution Log</span>
-                    <span class="panel-badge panel-badge--terminal">Model Context Protocol</span>
+                    <ObTooltip Text="Compliance tools invoked over the Model Context Protocol wire protocol before the LLM answer is generated — same tools external clients (e.g. Cursor) can call directly.">
+                        <span class="panel-badge panel-badge--terminal">Model Context Protocol</span>
+                    </ObTooltip>
                 </div>
 
                 <div class="mcp-log">
@@ -238,49 +280,67 @@
             <section class="panel panel-telemetry">
                 <div class="panel-header">
                     <span class="panel-title"><i class="fa-solid fa-chart-line"></i> Benchmarking &amp; Telemetry</span>
-                    <span class="panel-badge">RAGAS Suite</span>
+                    <ObTooltip Text="RAGAS faithfulness scores come from cached golden-set evals stored in DynamoDB — real benchmarks, not live heuristics on every query.">
+                        <span class="panel-badge">RAGAS Suite</span>
+                    </ObTooltip>
                 </div>
 
-                <div class="telemetry-grid">
-                    <div class="metric-card">
+                <div class="telemetry-body">
+                    <div class="telemetry-grid">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Query Embedding", "OpenAI text-embedding-3-small converts your question into a 1536-dimensional vector for dense similarity search.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Query Embedding</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.EmbeddingMs)</span>
-                        <span class="metric-hint">OpenAI text-embedding-3-small</span>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Qdrant Dense Search", "HNSW approximate nearest-neighbor search in the active tenant Qdrant collection — returns the top 8 child chunk hits.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Qdrant Dense Search</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.QdrantSearchMs)</span>
-                        <span class="metric-hint">HNSW · top-8 child hits</span>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("DynamoDB Child Load", "Child chunk records loaded from DynamoDB under CHILD# sort keys — warm Lambda containers cache these between requests.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">DynamoDB Child Load</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.DynamoDbAssemblyMs)</span>
-                        <span class="metric-hint">@(State.Telemetry.ChildChunksCached ? "Warm Lambda cache hit" : "Partition CHILD# query")</span>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Parent Assembly", "Parent chunks fetched via DynamoDB BatchGet — larger token windows that child hits roll up into for LLM context.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Parent Assembly</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.ParentAssemblyMs)</span>
-                        <span class="metric-hint">BatchGet parent chunks</span>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Hybrid Rerank", "BM25 and dense rankings merged with reciprocal rank fusion (RRF). BM25 runs in parallel with vector search.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Hybrid Rerank</span>
                         <span class="metric-value">@FormatLatency(State.Telemetry.HybridRerankMs)</span>
-                        <span class="metric-hint">RRF fusion · BM25 @FormatLatency(State.Telemetry.Bm25Ms) parallel</span>
                     </div>
-                    <div class="metric-card metric-card--highlight">
+                    <div class="metric-card metric-card--highlight metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("RAGAS Faithfulness Score", "Offline RAGAS faithfulness benchmark — measures how grounded answers are in retrieved context. Seeded via POST /admin/eval.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">RAGAS Faithfulness Score</span>
                         <span class="metric-value">@FormatScore(State.EvalStatus.Faithfulness)</span>
-                        <span class="metric-hint">@State.FormatEvalHint()</span>
                     </div>
-                    <div class="metric-card metric-card--success">
+                    <div class="metric-card metric-card--success metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Cross-Partition Reads", "Isolation audit: counts data-plane reads and verifies none crossed tenant partition or Qdrant collection boundaries. 0% is the goal.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Cross-Partition Reads</span>
                         <span class="metric-value">@FormatLeakPercent(State.Telemetry)</span>
-                        <span class="metric-hint">@FormatLeakHint(State.Telemetry)</span>
                     </div>
-                    <div class="metric-card">
+                    <div class="metric-card metric-card--hoverable"
+                         @onmouseenter='() => SetTelemetryHint("Retrieved Chunks", "Parent chunks passed to GPT after hybrid reranking — typically the top 2 parents form the final context window.")'
+                         @onmouseleave="ClearTelemetryHint">
                         <span class="metric-label">Retrieved Chunks</span>
                         <span class="metric-value">@State.Telemetry.RetrievedChunks</span>
-                        <span class="metric-hint">Post-rerank context window</span>
+                    </div>
+                    </div>
+                    <div class="telemetry-hint-bar">
+                        <span class="telemetry-hint-label @(_telemetryHintLabel is null ? "telemetry-hint-label--idle" : "")">
+                            @(_telemetryHintLabel ?? "Overview")
+                        </span>
+                        <p class="telemetry-hint-text">@(_telemetryHint ?? State.FormatEvalHint())</p>
                     </div>
                 </div>
             </section>
@@ -296,13 +356,18 @@
     private bool _tutorialEligibilityChecked;
     private IReadOnlyList<IndexedDocument> _indexedDocuments = [];
     private OnboardingTutorialModal? _tutorialModal;
+    private string? _telemetryHint;
+    private string? _telemetryHintLabel;
+    private bool _showDocumentViewer;
+    private string? _viewerDocumentId;
+    private int _viewerPage;
 
     protected override async Task OnInitializedAsync()
     {
         State.OnChange += HandleStateChanged;
         await State.InitializeAsync();
         _selectedTenantId = State.ActiveTenant?.Id ?? TenantId.Tenant001;
-        RefreshIndexedDocuments();
+        await RefreshIndexedDocumentsAsync();
         await TryShowTutorialOnFirstVisitAsync();
     }
 
@@ -311,13 +376,13 @@
         if (State.ActiveTenant is not null)
         {
             _selectedTenantId = State.ActiveTenant.Id;
-            RefreshIndexedDocuments();
+            _ = RefreshIndexedDocumentsAsync();
         }
 
         InvokeAsync(StateHasChanged);
     }
 
-    private void RefreshIndexedDocuments()
+    private async Task RefreshIndexedDocumentsAsync()
     {
         if (State.ActiveTenant is null)
         {
@@ -325,7 +390,7 @@
             return;
         }
 
-        _indexedDocuments = TenantDocumentCatalog.GetDocuments(State.ActiveTenant.Id);
+        _indexedDocuments = await OnboardingApi.GetDocumentsAsync(State.ActiveTenant.Id);
     }
 
     private async Task TryShowTutorialOnFirstVisitAsync()
@@ -359,6 +424,35 @@
     {
         _showTutorial = false;
         await State.SubmitQueryAsync(query);
+    }
+
+    private void OpenDocumentViewer(string? documentId = null, int page = 0)
+    {
+        _viewerDocumentId = documentId;
+        _viewerPage = page;
+        _showDocumentViewer = true;
+    }
+
+    private void ViewDocumentFromContext((string DocumentId, int Page) request) =>
+        OpenDocumentViewer(request.DocumentId, request.Page);
+
+    private void CloseDocumentViewer()
+    {
+        _showDocumentViewer = false;
+        _viewerDocumentId = null;
+        _viewerPage = 0;
+    }
+
+    private void SetTelemetryHint(string label, string hint)
+    {
+        _telemetryHintLabel = label;
+        _telemetryHint = hint;
+    }
+
+    private void ClearTelemetryHint()
+    {
+        _telemetryHintLabel = null;
+        _telemetryHint = null;
     }
 
     private void OnTenantSwitched()

@@ -1,0 +1,143 @@
+@using blazor_portfolio_2026.Models.Onboarding
+@inject OnboardingApiClient OnboardingApi
+
+@if (Visible && ActiveTenant is not null)
+{
+    <div class="doc-viewer-backdrop" @onclick="Close">
+        <div class="doc-viewer-modal"
+             role="dialog"
+             aria-modal="true"
+             aria-labelledby="doc-viewer-title"
+             @onclick:stopPropagation="true"
+             @onkeydown="HandleKeyDown">
+            <header class="doc-viewer-header">
+                <div>
+                    <p class="doc-viewer-eyebrow">@ActiveTenant.DisplayId · Indexed corpus</p>
+                    <h2 id="doc-viewer-title" class="doc-viewer-title">Policy Documents</h2>
+                </div>
+                <button type="button" class="doc-viewer-close" @onclick="Close" aria-label="Close document viewer">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </header>
+
+            <div class="doc-viewer-body">
+                <aside class="doc-viewer-list">
+                    @foreach (var doc in Documents)
+                    {
+                        var selected = string.Equals(doc.DocumentId, _selectedDocumentId, StringComparison.OrdinalIgnoreCase);
+                        <button type="button"
+                                class="doc-viewer-item @(selected ? "doc-viewer-item--active" : "")"
+                                @onclick="() => SelectDocument(doc.DocumentId)">
+                            <span class="doc-viewer-item-name">@doc.DisplayName</span>
+                            <code class="doc-viewer-item-id">@doc.DocumentId</code>
+                        </button>
+                    }
+                </aside>
+
+                <div class="doc-viewer-panel">
+                    @if (_selectedDocument is not null)
+                    {
+                        <div class="doc-viewer-panel-header">
+                            <div>
+                                <h3>@_selectedDocument.DisplayName</h3>
+                                @if (InitialPage > 0 && string.Equals(_selectedDocument.DocumentId, InitialDocumentId, StringComparison.OrdinalIgnoreCase))
+                                {
+                                    <p class="doc-viewer-page-note">Opened to cited page @InitialPage</p>
+                                }
+                            </div>
+                            @if (OnboardingApi.IsConfigured)
+                            {
+                                <a class="doc-viewer-open-tab"
+                                   href="@GetPdfUrl(_selectedDocument.DocumentId, GetViewerPage(_selectedDocument.DocumentId))"
+                                   target="_blank"
+                                   rel="noopener noreferrer">
+                                    <i class="fa-solid fa-up-right-from-square"></i> Open in new tab
+                                </a>
+                            }
+                        </div>
+                        @if (OnboardingApi.IsConfigured)
+                        {
+                            <iframe class="doc-viewer-frame"
+                                    title="@($"{_selectedDocument.DisplayName} PDF")"
+                                    src="@GetPdfUrl(_selectedDocument.DocumentId, GetViewerPage(_selectedDocument.DocumentId))"></iframe>
+                        }
+                        else
+                        {
+                            <div class="doc-viewer-unavailable">
+                                Configure ONBOARDING_API_BASE_URL to stream PDFs from the onboarding API.
+                            </div>
+                        }
+                    }
+                </div>
+            </div>
+        </div>
+    </div>
+}
+
+@code {
+    private string? _selectedDocumentId;
+    private IndexedDocument? _selectedDocument;
+
+    [Parameter]
+    public bool Visible { get; set; }
+
+    [Parameter]
+    public TenantProfile? ActiveTenant { get; set; }
+
+    [Parameter]
+    public IReadOnlyList<IndexedDocument> Documents { get; set; } = [];
+
+    [Parameter]
+    public string? InitialDocumentId { get; set; }
+
+    [Parameter]
+    public int InitialPage { get; set; }
+
+    [Parameter]
+    public EventCallback OnClose { get; set; }
+
+    protected override void OnParametersSet()
+    {
+        if (!Visible || ActiveTenant is null || Documents.Count == 0)
+        {
+            return;
+        }
+
+        var targetId = InitialDocumentId;
+        if (string.IsNullOrWhiteSpace(targetId) ||
+            Documents.All(d => !string.Equals(d.DocumentId, targetId, StringComparison.OrdinalIgnoreCase)))
+        {
+            targetId = Documents[0].DocumentId;
+        }
+
+        SelectDocument(targetId);
+    }
+
+    private int GetViewerPage(string documentId) =>
+        InitialPage > 0 &&
+        string.Equals(documentId, InitialDocumentId, StringComparison.OrdinalIgnoreCase)
+            ? InitialPage
+            : 0;
+
+    private void SelectDocument(string documentId)
+    {
+        _selectedDocumentId = documentId;
+        _selectedDocument = Documents.FirstOrDefault(d =>
+            string.Equals(d.DocumentId, documentId, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private string GetPdfUrl(string documentId, int page) =>
+        ActiveTenant is null
+            ? string.Empty
+            : OnboardingApi.GetDocumentPdfUrl(ActiveTenant.Id, documentId, page);
+
+    private async Task Close() => await OnClose.InvokeAsync();
+
+    private async Task HandleKeyDown(KeyboardEventArgs e)
+    {
+        if (e.Key == "Escape")
+        {
+            await Close();
+        }
+    }
+}

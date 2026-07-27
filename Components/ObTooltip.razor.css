@@ -1,0 +1,12 @@
+.ob-tooltip {
+    position: relative;
+    display: inline-flex;
+    max-width: 100%;
+    cursor: help;
+    outline: none;
+}
+
+.ob-tooltip--block {
+    display: block;
+    width: 100%;
+}

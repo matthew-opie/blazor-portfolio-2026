@@ -2,29 +2,58 @@
 
 <div class="context-body">
     <div class="context-badges">
-        <span class="retrieval-badge retrieval-badge--@Context.PrimaryMethod.ToString().ToLowerInvariant()">
-            @(Context.PrimaryMethod == RetrievalMethod.Bm25 ? "BM25 Hit" : "Dense Vector Hit")
-        </span>
+        <ObTooltip Position="ObTooltip.TooltipPosition.Bottom" Text="@(Context.PrimaryMethod == RetrievalMethod.Bm25
+            ? "Lexical BM25 match — surfaced by exact keyword overlap with your query."
+            : "Semantic match — surfaced by embedding similarity in Qdrant.")">
+            <span class="retrieval-badge retrieval-badge--@Context.PrimaryMethod.ToString().ToLowerInvariant()">
+                @(Context.PrimaryMethod == RetrievalMethod.Bm25 ? "BM25 Hit" : "Dense Vector Hit")
+            </span>
+        </ObTooltip>
         @if (Context.HybridReranked)
         {
-            <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
+            <ObTooltip Position="ObTooltip.TooltipPosition.Bottom" Text="Promoted by reciprocal rank fusion — merged BM25 and dense rankings into a single score.">
+                <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
+            </ObTooltip>
         }
         @if (Context.PageNumber > 0)
         {
-            <span class="retrieval-badge retrieval-badge--page">page @Context.PageNumber</span>
+            <ObTooltip Position="ObTooltip.TooltipPosition.Bottom" Text="Page number from the source PDF — use this to audit the answer against the original document.">
+                <span class="retrieval-badge retrieval-badge--page">page @Context.PageNumber</span>
+            </ObTooltip>
         }
-        <span class="retrieval-badge retrieval-badge--parent">
-            Parent Chunk size: @Context.ParentChunkTokenSize tokens
-        </span>
-        <span class="retrieval-badge retrieval-badge--score">
-            Score @Context.RelevanceScore.ToString("F2")
-        </span>
+        <ObTooltip Position="ObTooltip.TooltipPosition.Bottom" Text="Parent chunk token window sent to the LLM — child chunks are searched; parents carry the full surrounding policy text.">
+            <span class="retrieval-badge retrieval-badge--parent">
+                Parent Chunk size: @Context.ParentChunkTokenSize tokens
+            </span>
+        </ObTooltip>
+        <ObTooltip Position="ObTooltip.TooltipPosition.Bottom" Text="Post-rerank relevance score for this source — higher values mean a stronger match to your question.">
+            <span class="retrieval-badge retrieval-badge--score">
+                Score @Context.RelevanceScore.ToString("F2")
+            </span>
+        </ObTooltip>
     </div>
-    <p class="context-section">@Context.SectionTitle</p>
+    <div class="context-body-header">
+        <p class="context-section">@Context.SectionTitle</p>
+        @if (OnViewDocument.HasDelegate)
+        {
+            <button type="button"
+                    class="context-view-doc"
+                    @onclick="() => OnViewDocument.InvokeAsync((Context.DocumentId, Context.PageNumber))">
+                <i class="fa-solid fa-file-pdf"></i>
+                View source PDF@if (Context.PageNumber > 0)
+                {
+                    <text> · p.@Context.PageNumber</text>
+                }
+            </button>
+        }
+    </div>
     <div class="context-text">@Context.Content</div>
 </div>
 
 @code {
     [Parameter, EditorRequired]
     public RetrievedChunk Context { get; set; } = null!;
+
+    [Parameter]
+    public EventCallback<(string DocumentId, int Page)> OnViewDocument { get; set; }
 }

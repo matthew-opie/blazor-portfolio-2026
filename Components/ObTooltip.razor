@@ -1,0 +1,59 @@
+<div class="@RootClass"
+     @ref="_root"
+     tabindex="0"
+     aria-describedby="@(string.IsNullOrWhiteSpace(Text) ? null : _bubbleId)"
+     @onmouseenter="ShowAsync"
+     @onmouseleave="HideAsync"
+     @onfocusin="ShowAsync"
+     @onfocusout="HideAsync">
+    @ChildContent
+</div>
+
+@code {
+    private readonly string _bubbleId = "ob-tooltip-portal";
+    private ElementReference _root;
+
+    [Inject]
+    private IJSRuntime JS { get; set; } = default!;
+
+    [Parameter]
+    public RenderFragment? ChildContent { get; set; }
+
+    [Parameter]
+    public string? Text { get; set; }
+
+    /// <summary>Full-width wrapper for cards and rows.</summary>
+    [Parameter]
+    public bool Block { get; set; }
+
+    [Parameter]
+    public TooltipPosition Position { get; set; } = TooltipPosition.Top;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    private string RootClass =>
+        string.Join(" ",
+            "ob-tooltip",
+            Block ? "ob-tooltip--block" : null,
+            $"ob-tooltip--{Position.ToString().ToLowerInvariant()}",
+            Class);
+
+    private async Task ShowAsync()
+    {
+        if (string.IsNullOrWhiteSpace(Text))
+        {
+            return;
+        }
+
+        await JS.InvokeVoidAsync("obTooltip.show", _root, Text, Position.ToString());
+    }
+
+    private Task HideAsync() => JS.InvokeVoidAsync("obTooltip.hide").AsTask();
+
+    public enum TooltipPosition
+    {
+        Top,
+        Bottom
+    }
+}

@@ -145,9 +145,14 @@
 }
 
 .tutorial-list li {
+    list-style: none;
+}
+
+.tutorial-list .ob-tooltip {
     display: flex;
     align-items: flex-start;
     gap: 0.65rem;
+    width: 100%;
     font-size: 0.875rem;
     line-height: 1.55;
     color: var(--ob-text-muted);
@@ -170,6 +175,13 @@
     background: var(--ob-surface-muted);
     border: 1px solid var(--ob-border);
     border-radius: var(--ob-radius-sm);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ob-tooltip--block:hover .tutorial-panel-card,
+.tutorial-panel-card:hover {
+    border-color: var(--ob-accent-border);
+    box-shadow: 0 0 0 1px var(--ob-accent-soft);
 }
 
 .tutorial-panel-icon {
@@ -304,6 +316,13 @@
     background: var(--ob-surface-muted);
     border: 1px solid var(--ob-border);
     border-radius: var(--ob-radius-sm);
+    transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.ob-tooltip--block:hover .tutorial-doc-card,
+.tutorial-doc-card:hover {
+    border-color: var(--ob-accent-border);
+    box-shadow: 0 0 0 1px var(--ob-accent-soft);
 }
 
 .tutorial-doc-header {

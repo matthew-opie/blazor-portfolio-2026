@@ -142,6 +142,57 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
             payload.Error);
     }
 
+    public async Task<IReadOnlyList<IndexedDocument>> GetDocumentsAsync(
+        TenantId tenantId,
+        CancellationToken cancellationToken = default)
+    {
+        if (!IsConfigured)
+        {
+            return TenantDocumentCatalog.GetDocuments(tenantId);
+        }
+
+        try
+        {
+            var backendTenantId = ToBackendTenantId(tenantId);
+            using var response = await http.GetAsync($"tenants/{backendTenantId}/documents", cancellationToken);
+            var payload = await response.Content.ReadFromJsonAsync<DocumentsPayload>(cancellationToken: cancellationToken);
+
+            if (!response.IsSuccessStatusCode || payload is null || !payload.Success || payload.Documents is null)
+            {
+                return TenantDocumentCatalog.GetDocuments(tenantId);
+            }
+
+            var catalog = TenantDocumentCatalog.GetDocuments(tenantId)
+                .ToDictionary(d => d.DocumentId, StringComparer.OrdinalIgnoreCase);
+
+            return payload.Documents
+                .Select(doc =>
+                {
+                    catalog.TryGetValue(doc.DocumentId, out var known);
+                    return new IndexedDocument(
+                        doc.DocumentId,
+                        doc.DisplayName ?? known?.DisplayName ?? doc.DocumentId,
+                        known?.Description ?? doc.SectionTitle ?? doc.DisplayName ?? doc.DocumentId,
+                        known?.SampleQuery ?? string.Empty);
+                })
+                .OrderBy(d => d.DocumentId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
+        catch
+        {
+            return TenantDocumentCatalog.GetDocuments(tenantId);
+        }
+    }
+
+    public string GetDocumentPdfUrl(TenantId tenantId, string documentId, int page = 0)
+    {
+        EnsureConfigured();
+
+        var backendTenantId = ToBackendTenantId(tenantId);
+        var url = $"{_baseUrl.TrimEnd('/')}/tenants/{backendTenantId}/documents/{Uri.EscapeDataString(documentId)}/pdf";
+        return page > 0 ? $"{url}#page={page}" : url;
+    }
+
     private static string ConfigureBaseUrl(IConfiguration configuration) =>
         configuration["OnboardingApi:BaseUrl"]?.Trim() ?? string.Empty;
 
@@ -246,6 +297,30 @@ public sealed class OnboardingApiClient(HttpClient http, IConfiguration configur
 
         [JsonPropertyName("error")]
         public string? Error { get; set; }
+    }
+
+    private sealed class DocumentsPayload
+    {
+        [JsonPropertyName("success")]
+        public bool Success { get; set; }
+
+        [JsonPropertyName("documents")]
+        public List<DocumentPayload>? Documents { get; set; }
+    }
+
+    private sealed class DocumentPayload
+    {
+        [JsonPropertyName("documentId")]
+        public string DocumentId { get; set; } = string.Empty;
+
+        [JsonPropertyName("displayName")]
+        public string? DisplayName { get; set; }
+
+        [JsonPropertyName("sectionTitle")]
+        public string? SectionTitle { get; set; }
+
+        [JsonPropertyName("pdfUrl")]
+        public string? PdfUrl { get; set; }
     }
 
     private sealed class IngestStatusPayload

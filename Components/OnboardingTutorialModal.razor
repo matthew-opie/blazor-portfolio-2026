@@ -37,16 +37,22 @@
                             </p>
                             <ul class="tutorial-list">
                                 <li>
-                                    <i class="fa-solid fa-bolt"></i>
-                                    <span><strong>Real backend</strong> — queries hit production .NET 10 AWS Lambdas, not mock data.</span>
+                                    <ObTooltip Text="AWS Lambda Function URL · DynamoDB · Qdrant · OpenAI — same stack as the production onboarding API repos linked from Portfolio.">
+                                        <i class="fa-solid fa-bolt"></i>
+                                        <span><strong>Real backend</strong> — queries hit production .NET 10 AWS Lambdas, not mock data.</span>
+                                    </ObTooltip>
                                 </li>
                                 <li>
-                                    <i class="fa-solid fa-layer-group"></i>
-                                    <span><strong>Hybrid RAG</strong> — BM25 keyword search fused with Qdrant dense vectors over indexed PDFs.</span>
+                                    <ObTooltip Text="BM25 finds exact keywords (e.g. ticker symbols); dense vectors catch paraphrased questions. Reciprocal rank fusion merges both ranked lists.">
+                                        <i class="fa-solid fa-layer-group"></i>
+                                        <span><strong>Hybrid RAG</strong> — BM25 keyword search fused with Qdrant dense vectors over indexed PDFs.</span>
+                                    </ObTooltip>
                                 </li>
                                 <li>
-                                    <i class="fa-solid fa-shield-halved"></i>
-                                    <span><strong>Tenant isolation</strong> — ten separate clients; switching tenants resets chat and proves partition boundaries.</span>
+                                    <ObTooltip Text="Each tenant has a unique DynamoDB partition key and Qdrant collection. Switching tenants clears chat, tools, and telemetry to demonstrate zero cross-tenant leakage.">
+                                        <i class="fa-solid fa-shield-halved"></i>
+                                        <span><strong>Tenant isolation</strong> — ten separate clients; switching tenants resets chat and proves partition boundaries.</span>
+                                    </ObTooltip>
                                 </li>
                             </ul>
                         </section>
@@ -57,21 +63,30 @@
                             <p class="tutorial-eyebrow">Layout</p>
                             <h2 class="tutorial-title">Three panels, one pipeline</h2>
                             <div class="tutorial-panels">
-                                <article class="tutorial-panel-card">
-                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-comments"></i></span>
-                                    <h3>RAG Query Interface</h3>
-                                    <p>Ask natural-language questions about IPS limits, KYC details, or restricted tickers. Answers stream live with expandable source citations.</p>
-                                </article>
-                                <article class="tutorial-panel-card">
-                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-terminal"></i></span>
-                                    <h3>MCP Tool Execution Log</h3>
-                                    <p>Before synthesis, the agent invokes compliance tools over the Model Context Protocol — ticker checks, limit lookups — with full request/response traces.</p>
-                                </article>
-                                <article class="tutorial-panel-card">
-                                    <span class="tutorial-panel-icon"><i class="fa-solid fa-chart-line"></i></span>
-                                    <h3>Benchmarking &amp; Telemetry</h3>
-                                    <p>Per-query latency breakdown (embedding, Qdrant, DynamoDB, rerank) plus cached RAGAS faithfulness scores and cross-partition isolation checks.</p>
-                                </article>
+                                <ObTooltip Block="true" Position="ObTooltip.TooltipPosition.Bottom"
+                                           Text="Type a question or pick a demo chip. Answers stream token-by-token over SSE with expandable PDF citations underneath.">
+                                    <article class="tutorial-panel-card">
+                                        <span class="tutorial-panel-icon"><i class="fa-solid fa-comments"></i></span>
+                                        <h3>RAG Query Interface</h3>
+                                        <p>Ask natural-language questions about IPS limits, KYC details, or restricted tickers. Answers stream live with expandable source citations.</p>
+                                    </article>
+                                </ObTooltip>
+                                <ObTooltip Block="true" Position="ObTooltip.TooltipPosition.Bottom"
+                                           Text="Model Context Protocol (MCP) tools run before GPT synthesis — e.g. check_ticker_restriction — with timestamps, args, and raw JSON output.">
+                                    <article class="tutorial-panel-card">
+                                        <span class="tutorial-panel-icon"><i class="fa-solid fa-terminal"></i></span>
+                                        <h3>MCP Tool Execution Log</h3>
+                                        <p>Before synthesis, the agent invokes compliance tools over the Model Context Protocol — ticker checks, limit lookups — with full request/response traces.</p>
+                                    </article>
+                                </ObTooltip>
+                                <ObTooltip Block="true" Position="ObTooltip.TooltipPosition.Bottom"
+                                           Text="Every query records stage-level latency. RAGAS faithfulness is a cached offline benchmark, not computed live on each request.">
+                                    <article class="tutorial-panel-card">
+                                        <span class="tutorial-panel-icon"><i class="fa-solid fa-chart-line"></i></span>
+                                        <h3>Benchmarking &amp; Telemetry</h3>
+                                        <p>Per-query latency breakdown (embedding, Qdrant, DynamoDB, rerank) plus cached RAGAS faithfulness scores and cross-partition isolation checks.</p>
+                                    </article>
+                                </ObTooltip>
                             </div>
                             <p class="tutorial-note">
                                 Use the <strong>Active Tenant</strong> selector in the header to switch between ten isolated institutional clients —
@@ -89,27 +104,51 @@
                             </p>
                             <dl class="tutorial-glossary">
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--bm25">BM25 Hit</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Okapi BM25 — classic lexical search over inverted indexes. Excels when the query contains exact tokens from the document.">
+                                            <span class="retrieval-badge retrieval-badge--bm25">BM25 Hit</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>Chunk surfaced by keyword (lexical) search — strong for exact terms like ticker symbols or section numbers.</dd>
                                 </div>
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--densevector">Dense Vector Hit</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Embedding similarity search in Qdrant's HNSW index — finds conceptually related passages even when wording differs.">
+                                            <span class="retrieval-badge retrieval-badge--densevector">Dense Vector Hit</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>Chunk surfaced by semantic embedding similarity in Qdrant — strong for paraphrased or conceptual questions.</dd>
                                 </div>
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Reciprocal Rank Fusion (RRF) combines BM25 and dense rankings so neither leg dominates the final context window.">
+                                            <span class="retrieval-badge retrieval-badge--rerank">Hybrid Reranked</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>Chunk was promoted through reciprocal rank fusion, merging BM25 and dense results into a final ranking.</dd>
                                 </div>
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--page">page N</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Extracted during PdfPig ingest — lets compliance teams trace an AI answer back to a specific page in the uploaded PDF.">
+                                            <span class="retrieval-badge retrieval-badge--page">page N</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>PDF page number for audit trails — maps back to the original uploaded document.</dd>
                                 </div>
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--parent">Parent Chunk size</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Parent–child chunking: small child chunks are searched; larger parent chunks (shown here in tokens) are sent to the LLM for richer context.">
+                                            <span class="retrieval-badge retrieval-badge--parent">Parent Chunk size</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>Token window of the parent chunk passed to the LLM (child chunks are searched; parents supply context).</dd>
                                 </div>
                                 <div class="tutorial-glossary-row">
-                                    <dt><span class="retrieval-badge retrieval-badge--score">Score</span></dt>
+                                    <dt>
+                                        <ObTooltip Text="Normalized relevance after hybrid reranking — compare across sources in the same response; higher is a stronger match.">
+                                            <span class="retrieval-badge retrieval-badge--score">Score</span>
+                                        </ObTooltip>
+                                    </dt>
                                     <dd>Post-rerank relevance score — higher values indicate stronger match to your query.</dd>
                                 </div>
                             </dl>
@@ -133,19 +172,24 @@
                                 <ul class="tutorial-doc-list">
                                     @foreach (var doc in Documents)
                                     {
-                                        <li class="tutorial-doc-card">
-                                            <div class="tutorial-doc-header">
-                                                <h3>@doc.DisplayName</h3>
-                                                <code class="tutorial-doc-id">@doc.DocumentId</code>
-                                            </div>
-                                            <p>@doc.Description</p>
-                                            <button type="button"
-                                                    class="tutorial-doc-query"
-                                                    disabled="@(!CanRunQuery)"
-                                                    @onclick="() => RunDocumentQuery(doc.SampleQuery)">
-                                                <i class="fa-solid fa-magnifying-glass"></i>
-                                                Try: @doc.SampleQuery
-                                            </button>
+                                        <li>
+                                            <ObTooltip Block="true" Position="ObTooltip.TooltipPosition.Bottom"
+                                                       Text="@($"Indexed as {doc.DocumentId} in this tenant's DynamoDB partition and Qdrant collection. Click the sample query to see retrieved chunks from this document.")">
+                                                <article class="tutorial-doc-card">
+                                                    <div class="tutorial-doc-header">
+                                                        <h3>@doc.DisplayName</h3>
+                                                        <code class="tutorial-doc-id">@doc.DocumentId</code>
+                                                    </div>
+                                                    <p>@doc.Description</p>
+                                                    <button type="button"
+                                                            class="tutorial-doc-query"
+                                                            disabled="@(!CanRunQuery)"
+                                                            @onclick="() => RunDocumentQuery(doc.SampleQuery)">
+                                                        <i class="fa-solid fa-magnifying-glass"></i>
+                                                        Try: @doc.SampleQuery
+                                                    </button>
+                                                </article>
+                                            </ObTooltip>
                                         </li>
                                     }
                                 </ul>
