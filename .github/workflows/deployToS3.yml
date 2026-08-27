@@ -72,8 +72,8 @@ jobs:
         AWS_REGION: 'us-east-1'    # optional: defaults to us-east-1
         SOURCE_DIR: 'wwwroot'      # optional: defaults to entire repository
 
-    # After sync so --delete cannot wipe bare route keys, and HTML/boot always win with no-cache.
-    - name: Set no-cache on HTML shells and boot manifest
+    # After sync so --delete cannot wipe bare route keys, and HTML shells always win with no-cache.
+    - name: Set no-cache on HTML shells
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -94,6 +94,3 @@ jobs:
           aws s3 cp "wwwroot/$route/index.html" "s3://www.mattopie.com/$route/index.html" \
             --acl public-read --content-type text/html --cache-control "$CACHE"
         done
-
-        aws s3 cp "wwwroot/_framework/blazor.boot.json" "s3://www.mattopie.com/_framework/blazor.boot.json" \
-          --acl public-read --content-type application/json --cache-control "$CACHE"
