@@ -61,17 +61,6 @@ jobs:
       with:
         name: blazorStaticSite
 
-    - name: Upload bare SPA route keys to S3
-      env:
-        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
-        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION: us-east-1
-      run: |
-        INDEX="wwwroot/index.html"
-        for route in portfolio onboarding resume cv markdown typing pomodoro weather counter cv/licenses; do
-          aws s3 cp "$INDEX" "s3://www.mattopie.com/$route" --acl public-read --content-type text/html
-        done
- 
     - name: Deploy to S3 🚀
       uses: jakejarvis/s3-sync-action@master
       with:
@@ -82,3 +71,29 @@ jobs:
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
         AWS_REGION: 'us-east-1'    # optional: defaults to us-east-1
         SOURCE_DIR: 'wwwroot'      # optional: defaults to entire repository
+
+    # After sync so --delete cannot wipe bare route keys, and HTML/boot always win with no-cache.
+    - name: Set no-cache on HTML shells and boot manifest
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: us-east-1
+      run: |
+        CACHE="no-cache, no-store, must-revalidate"
+        INDEX="wwwroot/index.html"
+        ROUTES="portfolio onboarding resume cv markdown typing pomodoro weather counter cv/licenses"
+
+        aws s3 cp "$INDEX" "s3://www.mattopie.com/index.html" \
+          --acl public-read --content-type text/html --cache-control "$CACHE"
+        aws s3 cp "wwwroot/404.html" "s3://www.mattopie.com/404.html" \
+          --acl public-read --content-type text/html --cache-control "$CACHE"
+
+        for route in $ROUTES; do
+          aws s3 cp "$INDEX" "s3://www.mattopie.com/$route" \
+            --acl public-read --content-type text/html --cache-control "$CACHE"
+          aws s3 cp "wwwroot/$route/index.html" "s3://www.mattopie.com/$route/index.html" \
+            --acl public-read --content-type text/html --cache-control "$CACHE"
+        done
+
+        aws s3 cp "wwwroot/_framework/blazor.boot.json" "s3://www.mattopie.com/_framework/blazor.boot.json" \
+          --acl public-read --content-type application/json --cache-control "$CACHE"
